@@ -175,7 +175,7 @@ See [SECURITY.md](SECURITY.md) for reporting guidance.
 python3 -m unittest discover -s tests -v
 ```
 
-Pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md).
+Pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) and the current [roadmap](ROADMAP.md).
 
 ## License
 
