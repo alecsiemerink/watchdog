@@ -24,6 +24,7 @@ from .person import (
     VisionPersonDetector,
     annotate_people,
 )
+from .resolution import resolve_max_resolution
 from .retention import RetentionResult, apply_retention
 from .tailscale import TailscaleShare
 from .tamper import CameraTamperDetector, ViewMetrics
@@ -87,17 +88,17 @@ def jpeg_from_bgr(frame: bytes, width: int, height: int, quality: int = 76) -> b
 
 class Watchdog:
     def __init__(self, config: Config) -> None:
-        self.config = config
         self.ffmpeg = find_executable("ffmpeg", "/opt/homebrew/bin/ffmpeg")
+        self.config = resolve_max_resolution(config, self.ffmpeg, log=log)
         self.stop_event = threading.Event()
         self.live_state = LiveState()
         self.live_server = LiveServer(
             self.live_state,
-            config.output_path,
-            config.share_port,
+            self.config.output_path,
+            self.config.share_port,
             log,
         )
-        self.hark = HarkClient(config.hark_webhook_url, log)
+        self.hark = HarkClient(self.config.hark_webhook_url, log)
         self.tailscale: TailscaleShare | None = None
         self.caffeinate: subprocess.Popen | None = None
         self.camera: subprocess.Popen | None = None

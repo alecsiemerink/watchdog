@@ -19,6 +19,7 @@ from . import __version__
 from .config import Config, config_dir, load_config, pid_path, save_config
 from .hark import HarkClient
 from .person import VisionPersonDetector
+from .resolution import resolve_max_resolution
 from .retention import apply_retention
 from .service import (
     install_launch_agent,
@@ -174,6 +175,7 @@ def configure(args: argparse.Namespace, config: Config) -> int:
             args.camera_index is not None,
             args.microphone_index is not None,
             args.share_port is not None,
+            args.max_resolution is not None,
             args.person_detection is not None,
             args.tamper_detection is not None,
             args.pre_roll_seconds is not None,
@@ -214,6 +216,8 @@ def configure(args: argparse.Namespace, config: Config) -> int:
             updates["microphone_index"] = args.microphone_index
         if args.share_port is not None:
             updates["share_port"] = args.share_port
+        if args.max_resolution is not None:
+            updates["auto_max_resolution"] = args.max_resolution
         if args.person_detection is not None:
             updates["person_detection"] = args.person_detection
         if args.tamper_detection is not None:
@@ -250,6 +254,7 @@ def take_snapshot(config: Config, destination: Path | None = None) -> Path:
         return destination
 
     ffmpeg = find_executable("ffmpeg", "/opt/homebrew/bin/ffmpeg")
+    config = resolve_max_resolution(config, ffmpeg, log=lambda _message: None)
     subprocess.run(
         [
             ffmpeg,
@@ -354,6 +359,8 @@ def doctor_command(config: Config) -> int:
     print(f"Python: {platform.python_version()}")
     ffmpeg = find_executable("ffmpeg", "/opt/homebrew/bin/ffmpeg")
     print(f"ffmpeg: {ffmpeg}")
+    config = resolve_max_resolution(config, ffmpeg)
+    print(f"Camera resolution: {config.width}x{config.height}")
     print("Checking camera and microphone for one second…")
     result = subprocess.run(
         [
@@ -498,6 +505,12 @@ def build_parser() -> argparse.ArgumentParser:
     configure_parser.add_argument("--camera-index", type=int)
     configure_parser.add_argument("--microphone-index", type=int)
     configure_parser.add_argument("--share-port", type=int)
+    configure_parser.add_argument(
+        "--max-resolution",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Auto-select the camera's highest supported landscape resolution.",
+    )
     configure_parser.add_argument(
         "--person-detection",
         action=argparse.BooleanOptionalAction,

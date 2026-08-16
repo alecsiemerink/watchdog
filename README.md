@@ -10,6 +10,7 @@ Recordings stay on the Mac. Person detection uses Apple Vision on-device—camer
 ## Features
 
 - Local motion detection with a configurable, memory-bounded video pre-roll.
+- Automatic selection of the camera's highest supported landscape resolution.
 - H.264 video and AAC audio with synchronized silence during the pre-trigger video.
 - Optional on-device person detection using Apple Vision.
 - Sustained camera-cover, darkness, or major-view-change detection and recovery alerts.
@@ -177,9 +178,9 @@ Tailscale access rules still apply. Existing Serve paths are preserved. The proj
 
 ## Detection and recording defaults
 
-- Capture: 640×480 at 30 fps; recording at 15 fps.
+- Capture: automatically selects the largest supported landscape mode at 30 fps; recording runs at 15 fps. The 640×480 values in config are safe fallbacks only.
 - Motion: two consecutive checks with at least 2.5% changed sampled pixels.
-- Pre-roll: three seconds of video, bounded to about 42 MB at the default resolution.
+- Pre-roll: three seconds of raw video in a bounded buffer. Memory use scales with the selected resolution; it is about 315 MB at 1760×1328.
 - Audio: begins at the trigger and is timestamp-shifted to remain synchronized; pre-trigger video is silent.
 - Clip duration: at least 15 seconds, stops after 30 quiet seconds, maximum 10 minutes.
 - Person detection: one local Vision request per second, two positive hits to alert, five misses to clear, 50% minimum confidence.
@@ -200,6 +201,7 @@ Common overrides:
 
 ```bash
 hotel-watchdog configure \
+  --max-resolution \
   --pre-roll-seconds 5 \
   --person-detection \
   --tamper-detection \
@@ -207,6 +209,8 @@ hotel-watchdog configure \
   --retention-max-total-gb 5 \
   --minimum-free-disk-gb 3
 ```
+
+At startup, Hotel Watchdog probes AVFoundation and chooses the compatible landscape mode with the most pixels. Use `hotel-watchdog configure --no-max-resolution` to keep the explicit `width` and `height` values instead. If probing is unavailable, those values are also the automatic fallback.
 
 Set pre-roll to `0` to disable it; values above 10 seconds are rejected to bound memory use. Set a retention age or size to `0` to disable that individual limit. The free-disk floor is checked at startup and after completed clips.
 

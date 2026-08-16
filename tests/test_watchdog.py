@@ -11,7 +11,7 @@ class WatchdogCommandTests(unittest.TestCase):
         with patch(
             "hotel_watchdog.watchdog.find_executable", return_value="/tmp/ffmpeg"
         ):
-            watchdog = Watchdog(Config())
+            watchdog = Watchdog(Config(auto_max_resolution=False))
         command = watchdog.recorder_command(Path("/tmp/test.mp4"), 3.0)
         offset_index = command.index("-itsoffset")
         audio_input_index = command.index(":0")

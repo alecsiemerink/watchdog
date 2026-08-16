@@ -2,6 +2,12 @@
 
 All notable changes are documented here. The project follows semantic versioning while the command-line and configuration formats stabilize.
 
+## 0.2.1 — 2026-08-16
+
+- Auto-probe AVFoundation camera modes and select the compatible landscape resolution with the most pixels by default.
+- Keep configured width and height as safe fallbacks and add `--no-max-resolution` for explicit resolution control.
+- Verify this Mac's FaceTime HD Camera at 1760×1328 with a 1760×1328 live snapshot.
+
 ## 0.2.0 — 2026-08-16
 
 ### Added

@@ -32,6 +32,7 @@ class Config:
     microphone_index: int = 0
     width: int = 640
     height: int = 480
+    auto_max_resolution: bool = True
     camera_input_fps: int = 30
     recording_fps: int = 15
     share_port: int = 8766

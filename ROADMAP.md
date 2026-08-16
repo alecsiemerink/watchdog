@@ -19,6 +19,7 @@ Hotel Watchdog keeps capture local, remote access private, and unattended behavi
 - [x] Age, total-size, and free-disk retention policy with dry-run mode
 - [x] Active-recording deletion protection and Hark disk warnings
 - [x] macOS LaunchAgent install, status, and uninstall commands
+- [x] Automatic maximum landscape resolution selection with a safe fallback
 - [x] Camera/microphone permission onboarding and operational documentation
 - [x] Private rich-preview research: keep evidence tailnet-only while Hark requires publicly fetched images
 
