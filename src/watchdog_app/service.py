@@ -10,6 +10,7 @@ import tempfile
 import time
 from pathlib import Path
 
+from . import __version__
 from .config import Config, config_dir
 
 LAUNCH_AGENT_LABEL = "com.alecsiemerink.watchdog"
@@ -227,7 +228,7 @@ def install_launcher_app(executable: Path) -> Path:
         "CFBundleIdentifier": LAUNCHER_BUNDLE_ID,
         "CFBundleName": LAUNCHER_NAME,
         "CFBundlePackageType": "APPL",
-        "CFBundleShortVersionString": "1.0",
+        "CFBundleShortVersionString": __version__,
         "CFBundleVersion": "1",
         "LSMinimumSystemVersion": "13.0",
         "NSCameraUsageDescription": (
