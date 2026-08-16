@@ -56,7 +56,7 @@ With Homebrew and `pipx`:
 
 ```bash
 brew install ffmpeg pipx
-git clone git@github.com:alecsiemerink/watchdog.git
+git clone https://github.com/alecsiemerink/watchdog.git
 cd watchdog
 pipx install .
 ```
