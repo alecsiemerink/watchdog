@@ -44,6 +44,7 @@ flowchart LR
 - macOS with a camera and microphone
 - Python 3.10 or newer
 - [FFmpeg](https://ffmpeg.org/) for AVFoundation capture and recording
+- Apple Command Line Tools (`xcode-select --install`) for the automatic-login service launcher
 - Optional: [Hark for iPhone](https://hark.ryan.ceo/docs) for notifications
 - Optional: [Tailscale](https://tailscale.com/download/mac) on both Mac and phone for private remote viewing
 
@@ -102,7 +103,7 @@ hotel-watchdog doctor
 hotel-watchdog test-alert
 ```
 
-If access was denied previously, open **System Settings → Privacy & Security → Camera** and **Microphone**, then allow the terminal or Python/FFmpeg process that launches Hotel Watchdog.
+If access was denied previously, open **System Settings → Privacy & Security → Camera** and **Microphone**, then allow the terminal or Python/FFmpeg process that launches Hotel Watchdog. The automatic-login service has its own stable “Hotel Watchdog” permission entry, described below.
 
 ## Use
 
@@ -131,12 +132,14 @@ Recordings, evidence snapshots, and logs default to `~/Movies/HotelWatchdog`.
 
 ### Start automatically after login
 
-Run `doctor` from the installed executable first so macOS can grant access to the actual capture process. Then install the user LaunchAgent:
+Run `doctor` from the installed executable first, then install the user LaunchAgent:
 
 ```bash
 hotel-watchdog service install
 hotel-watchdog service status
 ```
+
+On first service launch, click **Allow** on the Camera and Microphone prompts for **Hotel Watchdog**. The installer builds a tiny ad-hoc-signed app wrapper at `~/.config/hotel-watchdog/Hotel Watchdog.app`; this gives macOS a stable graphical-app identity for privacy permissions while the LaunchAgent handles login startup. Its Dock icon disappears after permission onboarding, and it does not install a privileged helper.
 
 To write the LaunchAgent without arming immediately, use `service install --no-start`; it will load after the next login. Remove it with:
 
@@ -145,6 +148,12 @@ hotel-watchdog service uninstall
 ```
 
 This is a per-user LaunchAgent, not a privileged system daemon. It runs only in the logged-in graphical session.
+
+LaunchAgent output is written to `~/.config/hotel-watchdog/launchagent.log` so launchd does not need to open a protected media folder for stdout/stderr. Recordings remain in the configured output directory.
+
+### Tested release path
+
+v0.2.2 was exercised end to end on a 2021 MacBook Pro (`MacBookPro18,3`, Apple M1 Pro) running macOS 15.7.4, Python 3.12.2, FFmpeg 8.1, and Tailscale 1.96.4. The real-hardware test covered automatic 1760×1328 selection, motion and person events, camera cover/recovery, H.264/AAC recording with pre-roll, Hark delivery, tailnet-only snapshots/live view/byte-range playback, clean `pipx` installation, and LaunchAgent startup. Unit tests also run in CI on Python 3.10, 3.12, and 3.14.
 
 ### Locking the Mac
 

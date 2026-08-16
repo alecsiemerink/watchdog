@@ -23,6 +23,7 @@ from .resolution import resolve_max_resolution
 from .retention import apply_retention
 from .service import (
     install_launch_agent,
+    launch_agent_log_path,
     launch_agent_status,
     uninstall_launch_agent,
 )
@@ -459,14 +460,17 @@ def retention_command(args: argparse.Namespace, config: Config) -> int:
 
 def service_command(args: argparse.Namespace, config: Config) -> int:
     if args.service_command == "install":
+        stop_background()
         path = install_launch_agent(config, start_now=not args.no_start)
         print(f"Installed LaunchAgent: {path}")
         if args.no_start:
             print("It will arm at the next login. Run hotel-watchdog start to arm now.")
         else:
             print("LaunchAgent loaded; check hotel-watchdog status and the log.")
+        print(f"LaunchAgent log: {launch_agent_log_path()}")
         return 0
     if args.service_command == "uninstall":
+        stop_background()
         removed = uninstall_launch_agent()
         print("LaunchAgent removed." if removed else "LaunchAgent was not installed.")
         return 0
@@ -592,6 +596,11 @@ def main(argv: list[str] | None = None) -> int:
             return start_background(config)
         if args.command == "run":
             ensure_runtime_dir()
+            existing = read_pid()
+            if existing and existing != os.getpid() and process_is_watchdog(existing):
+                print(f"Hotel Watchdog is already running (PID {existing}).")
+                return 0
+            pid_path().unlink(missing_ok=True)
             pid_path().write_text(f"{os.getpid()}\n", encoding="utf-8")
             pid_path().chmod(0o600)
             return Watchdog(config).run()

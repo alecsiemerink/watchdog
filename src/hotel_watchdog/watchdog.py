@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import os
+import select
 import shutil
 import signal
 import subprocess
@@ -53,7 +54,10 @@ def read_exact(
     chunks: list[bytes] = []
     remaining = byte_count
     while remaining and not stop_event.is_set():
-        chunk = stream.read(remaining)
+        ready, _, _ = select.select([stream], [], [], 0.5)
+        if not ready:
+            continue
+        chunk = os.read(stream.fileno(), remaining)
         if not chunk:
             return None
         chunks.append(chunk)
@@ -203,7 +207,6 @@ class Watchdog:
         signal.signal(signal.SIGTERM, self._signal)
         signal.signal(signal.SIGINT, self._signal)
         self.live_server.start()
-        self.live_state.set_armed(True)
 
         live_url: str | None = None
         if self.config.tailscale_share:
@@ -551,6 +554,7 @@ class Watchdog:
                     )
                     self.live_state.update_frame(latest_jpeg)
                     if not armed_notification_sent:
+                        self.live_state.set_armed(True)
                         self._armed_notification(live_url)
                         armed_notification_sent = True
                 if (

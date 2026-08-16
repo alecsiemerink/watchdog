@@ -17,5 +17,12 @@ config.json
 *.jpg
 *.jpeg
 *.mjpeg
+*.png
+*.webp
+*.heic
+*.wav
+*.m4a
+*.aac
 watchdog.log
 watchdog.pid
+.DS_Store
