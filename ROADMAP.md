@@ -27,6 +27,7 @@ Hotel Watchdog follows a small-core approach: reliable local capture first, priv
 ## Backlog
 
 - [Camera obstruction or movement detection](https://github.com/alecsiemerink/hotel-watchdog/issues/1)
+- [Local person detection without face recognition](https://github.com/alecsiemerink/hotel-watchdog/issues/6)
 - [Pre-trigger recording buffer](https://github.com/alecsiemerink/hotel-watchdog/issues/2)
 - [Recording retention and disk-space policy](https://github.com/alecsiemerink/hotel-watchdog/issues/3)
 - [Native macOS background and menu-bar experience](https://github.com/alecsiemerink/hotel-watchdog/issues/4)
