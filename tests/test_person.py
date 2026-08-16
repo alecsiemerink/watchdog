@@ -37,6 +37,20 @@ class PersonPresenceTests(unittest.TestCase):
         self.assertTrue(annotated.startswith(b"\xff\xd8"))
         self.assertEqual(Image.open(io.BytesIO(annotated)).size, (100, 100))
 
+    def test_annotation_clips_vision_box_outside_image(self):
+        source = io.BytesIO()
+        Image.new("RGB", (100, 100), "black").save(source, "JPEG")
+        observation = PersonObservation(0.9, (-0.1, 0.95, 0.5, 0.2))
+        annotated = annotate_people(source.getvalue(), [observation])
+        self.assertTrue(annotated.startswith(b"\xff\xd8"))
+
+    def test_annotation_skips_box_entirely_outside_image(self):
+        source = io.BytesIO()
+        Image.new("RGB", (100, 100), "black").save(source, "JPEG")
+        observation = PersonObservation(0.9, (2.0, 2.0, 0.5, 0.5))
+        annotated = annotate_people(source.getvalue(), [observation])
+        self.assertTrue(annotated.startswith(b"\xff\xd8"))
+
 
 if __name__ == "__main__":
     unittest.main()

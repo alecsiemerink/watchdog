@@ -179,15 +179,26 @@ def annotate_people(jpeg: bytes, observations: list[PersonObservation]) -> bytes
     width, height = image.size
     for observation in observations:
         x, y, box_width, box_height = observation.bounding_box
-        left = round(x * width)
-        right = round((x + box_width) * width)
+        horizontal = sorted((round(x * width), round((x + box_width) * width)))
         # Vision uses a lower-left origin; Pillow uses upper-left.
-        top = round((1 - y - box_height) * height)
-        bottom = round((1 - y) * height)
+        vertical = sorted(
+            (
+                round((1 - y - box_height) * height),
+                round((1 - y) * height),
+            )
+        )
+        left = max(0, min(width - 1, horizontal[0]))
+        right = max(0, min(width - 1, horizontal[1]))
+        top = max(0, min(height - 1, vertical[0]))
+        bottom = max(0, min(height - 1, vertical[1]))
+        if right <= left or bottom <= top:
+            continue
         draw.rectangle((left, top, right, bottom), outline="#70F59A", width=3)
         label = f"person {observation.confidence:.0%}"
-        draw.rectangle((left, max(0, top - 18), left + 108, top), fill="#102018")
-        draw.text((left + 4, max(0, top - 16)), label, fill="#70F59A")
+        label_top = max(0, top - 18)
+        label_right = min(width - 1, left + 108)
+        draw.rectangle((left, label_top, label_right, top), fill="#102018")
+        draw.text((min(width - 1, left + 4), label_top + 2), label, fill="#70F59A")
     output = io.BytesIO()
     image.save(output, format="JPEG", quality=82)
     return output.getvalue()

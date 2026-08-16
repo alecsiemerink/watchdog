@@ -5,6 +5,7 @@ import getpass
 import json
 import os
 import platform
+import shlex
 import signal
 import subprocess
 import sys
@@ -55,8 +56,18 @@ def process_is_watchdog(pid: int) -> bool:
         text=True,
         check=False,
     )
-    command = result.stdout.lower().replace("-", "_")
-    return "watchdog_app" in command and "run" in command
+    try:
+        command = shlex.split(result.stdout.lower())
+    except ValueError:
+        return False
+    if "run" not in command:
+        return False
+    return any(
+        token == "watchdog"
+        or token.endswith("/watchdog")
+        or token.replace("-", "_") == "watchdog_app"
+        for token in command
+    )
 
 
 def ensure_runtime_dir() -> None:
