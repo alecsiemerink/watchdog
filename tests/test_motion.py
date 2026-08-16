@@ -2,7 +2,7 @@ import unittest
 
 from PIL import Image
 
-from hotel_watchdog.watchdog import jpeg_from_bgr, motion_fraction, sampled_green_pixels
+from watchdog_app.watchdog import jpeg_from_bgr, motion_fraction, sampled_green_pixels
 
 
 class MotionTests(unittest.TestCase):

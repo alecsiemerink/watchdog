@@ -5,16 +5,39 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from hotel_watchdog.config import Config, config_path, load_config, save_config
+from watchdog_app.config import Config, config_path, load_config, save_config
 
 
 class ConfigTests(unittest.TestCase):
+    def test_legacy_config_is_migrated_without_losing_webhook(self):
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            patch.dict(os.environ, {}, clear=True),
+            patch("watchdog_app.config.Path.home", return_value=Path(directory)),
+        ):
+            legacy = Path(directory) / ".config" / "hotel-watchdog" / "config.json"
+            legacy.parent.mkdir(parents=True)
+            legacy.write_text(
+                json.dumps(
+                    {
+                        "hark_webhook_url": "https://example.test/secret",
+                        "output_dir": "~/Movies/HotelWatchdog",
+                        "tailscale_path": "/hotel-watchdog",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            config = load_config()
+            self.assertEqual(config.hark_webhook_url, "https://example.test/secret")
+            self.assertEqual(config.output_dir, "~/Movies/HotelWatchdog")
+            self.assertEqual(config.tailscale_path, "/watchdog")
+            self.assertTrue(config_path().exists())
+            self.assertEqual(config_path().stat().st_mode & 0o777, 0o600)
+
     def test_round_trip_and_permissions(self):
         with (
             tempfile.TemporaryDirectory() as directory,
-            patch.dict(
-                os.environ, {"HOTEL_WATCHDOG_CONFIG_DIR": directory}, clear=False
-            ),
+            patch.dict(os.environ, {"WATCHDOG_CONFIG_DIR": directory}, clear=False),
         ):
             expected = Config(
                 hark_webhook_url="https://example.test/secret", tailscale_share=True
@@ -34,8 +57,8 @@ class ConfigTests(unittest.TestCase):
             with patch.dict(
                 os.environ,
                 {
-                    "HOTEL_WATCHDOG_CONFIG_DIR": directory,
-                    "HOTEL_WATCHDOG_HARK_URL": "https://environment.test",
+                    "WATCHDOG_CONFIG_DIR": directory,
+                    "WATCHDOG_HARK_URL": "https://environment.test",
                 },
                 clear=False,
             ):

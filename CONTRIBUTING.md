@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for helping improve Hotel Watchdog.
+Thanks for helping improve Watchdog.
 
 1. Open an issue for substantial behavior changes.
 2. Create a focused branch.

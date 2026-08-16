@@ -1,6 +1,6 @@
 import unittest
 
-from hotel_watchdog.tamper import CameraTamperDetector
+from watchdog_app.tamper import CameraTamperDetector
 
 
 class CameraTamperDetectorTests(unittest.TestCase):

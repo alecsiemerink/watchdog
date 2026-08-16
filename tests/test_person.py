@@ -3,7 +3,7 @@ import unittest
 
 from PIL import Image
 
-from hotel_watchdog.person import PersonObservation, PersonPresence, annotate_people
+from watchdog_app.person import PersonObservation, PersonPresence, annotate_people
 
 
 def person(confidence: float) -> PersonObservation:

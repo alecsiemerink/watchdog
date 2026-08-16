@@ -249,7 +249,7 @@ class Watchdog:
             )
         if result.critically_low:
             self.hark.send_background(
-                f"Hotel Watchdog disk space is critically low: "
+                f"Watchdog disk space is critically low: "
                 f"{result.free_bytes / 1_000_000_000:.1f} GB free after retention.",
                 summary="Watchdog disk space critically low",
             )
@@ -638,8 +638,8 @@ class Watchdog:
         except Exception as error:  # noqa: BLE001 - top-level daemon safety boundary.
             log(f"Fatal error: {error}")
             self.hark.send_background(
-                f"Hotel Watchdog stopped because of an error: {error}",
-                summary="Hotel Watchdog stopped",
+                f"Watchdog stopped because of an error: {error}",
+                summary="Watchdog stopped",
                 url=live_url,
             )
             return 1
@@ -660,4 +660,4 @@ class Watchdog:
             self.live_state.set_armed(False)
             self.live_server.stop()
             pid_path().unlink(missing_ok=True)
-            log("Hotel Watchdog stopped.")
+            log("Watchdog stopped.")

@@ -4,7 +4,7 @@ import time
 import unittest
 from pathlib import Path
 
-from hotel_watchdog.retention import apply_retention
+from watchdog_app.retention import apply_retention
 
 
 class RetentionTests(unittest.TestCase):

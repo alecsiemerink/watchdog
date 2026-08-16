@@ -5,7 +5,7 @@ from pathlib import Path
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
-from hotel_watchdog.live import LiveServer, LiveState
+from watchdog_app.live import LiveServer, LiveState
 
 
 class LiveServerTests(unittest.TestCase):

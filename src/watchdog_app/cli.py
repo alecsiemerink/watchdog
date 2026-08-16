@@ -56,7 +56,7 @@ def process_is_watchdog(pid: int) -> bool:
         check=False,
     )
     command = result.stdout.lower().replace("-", "_")
-    return "hotel_watchdog" in command and "run" in command
+    return "watchdog_app" in command and "run" in command
 
 
 def ensure_runtime_dir() -> None:
@@ -71,7 +71,7 @@ def ensure_runtime_dir() -> None:
 def start_background(config: Config) -> int:
     existing = read_pid()
     if existing and process_is_watchdog(existing):
-        print(f"Hotel Watchdog is already running (PID {existing}).")
+        print(f"Watchdog is already running (PID {existing}).")
         return 0
     pid_path().unlink(missing_ok=True)
     config.output_path.mkdir(parents=True, exist_ok=True)
@@ -79,7 +79,7 @@ def start_background(config: Config) -> int:
 
     with config.log_path.open("a", encoding="utf-8") as logfile:
         process = subprocess.Popen(
-            [sys.executable, "-m", "hotel_watchdog", "run"],
+            [sys.executable, "-m", "watchdog_app", "run"],
             stdin=subprocess.DEVNULL,
             stdout=logfile,
             stderr=subprocess.STDOUT,
@@ -89,11 +89,9 @@ def start_background(config: Config) -> int:
     pid_path().chmod(0o600)
     time.sleep(2)
     if process.poll() is not None:
-        print(
-            f"Hotel Watchdog failed to start. Check {config.log_path}.", file=sys.stderr
-        )
+        print(f"Watchdog failed to start. Check {config.log_path}.", file=sys.stderr)
         return 1
-    print(f"Hotel Watchdog started (PID {process.pid}).")
+    print(f"Watchdog started (PID {process.pid}).")
     print(f"Recordings: {config.output_path}")
     print(f"Log: {config.log_path}")
     if config.tailscale_share:
@@ -118,7 +116,7 @@ def stop_background() -> int:
     pid = read_pid()
     if not pid or not process_is_watchdog(pid):
         pid_path().unlink(missing_ok=True)
-        print("Hotel Watchdog is not running.")
+        print("Watchdog is not running.")
         return 0
     os.kill(pid, signal.SIGTERM)
     deadline = time.monotonic() + 20
@@ -127,7 +125,7 @@ def stop_background() -> int:
     if process_is_watchdog(pid):
         print(f"Watchdog PID {pid} is still finalizing its current recording.")
     else:
-        print("Hotel Watchdog stopped.")
+        print("Watchdog stopped.")
     return 0
 
 
@@ -144,9 +142,9 @@ def local_health(config: Config) -> dict | None:
 def show_status(config: Config) -> int:
     pid = read_pid()
     if not pid or not process_is_watchdog(pid):
-        print("Hotel Watchdog is not running.")
+        print("Watchdog is not running.")
         return 1
-    print(f"Hotel Watchdog is running (PID {pid}).")
+    print(f"Watchdog is running (PID {pid}).")
     health = local_health(config)
     if health:
         print(f"State: {health.get('last_event', 'Monitoring')}")
@@ -283,9 +281,7 @@ def take_snapshot(config: Config, destination: Path | None = None) -> Path:
 
 def share_for(config: Config) -> TailscaleShare:
     if not process_is_watchdog(read_pid() or -1):
-        raise RuntimeError(
-            "Start Hotel Watchdog before sharing its live view or recordings."
-        )
+        raise RuntimeError("Start Watchdog before sharing its live view or recordings.")
     share = TailscaleShare(port=config.share_port, route=config.tailscale_path)
     share.expose()
     return share
@@ -297,7 +293,7 @@ def snapshot_command(args: argparse.Namespace, config: Config) -> int:
     if args.notify:
         share = share_for(config)
         HarkClient(config.hark_webhook_url).send(
-            f"Current Hotel Watchdog snapshot from {now_text()}. Tap to view it privately over Tailscale.",
+            f"Current Watchdog snapshot from {now_text()}. Tap to view it privately over Tailscale.",
             summary="Current room snapshot",
             url=share.snapshot_url,
         )
@@ -464,9 +460,9 @@ def service_command(args: argparse.Namespace, config: Config) -> int:
         path = install_launch_agent(config, start_now=not args.no_start)
         print(f"Installed LaunchAgent: {path}")
         if args.no_start:
-            print("It will arm at the next login. Run hotel-watchdog start to arm now.")
+            print("It will arm at the next login. Run watchdog start to arm now.")
         else:
-            print("LaunchAgent loaded; check hotel-watchdog status and the log.")
+            print("LaunchAgent loaded; check watchdog status and the log.")
         print(f"LaunchAgent log: {launch_agent_log_path()}")
         return 0
     if args.service_command == "uninstall":
@@ -486,7 +482,7 @@ def service_command(args: argparse.Namespace, config: Config) -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="hotel-watchdog",
+        prog="watchdog",
         description="Motion-triggered macOS room monitoring with Hark and Tailscale.",
     )
     parser.add_argument("--version", action="version", version=__version__)
@@ -598,7 +594,7 @@ def main(argv: list[str] | None = None) -> int:
             ensure_runtime_dir()
             existing = read_pid()
             if existing and existing != os.getpid() and process_is_watchdog(existing):
-                print(f"Hotel Watchdog is already running (PID {existing}).")
+                print(f"Watchdog is already running (PID {existing}).")
                 return 0
             pid_path().unlink(missing_ok=True)
             pid_path().write_text(f"{os.getpid()}\n", encoding="utf-8")
@@ -616,8 +612,8 @@ def main(argv: list[str] | None = None) -> int:
             return doctor_command(config)
         if args.command == "test-alert":
             result = HarkClient(config.hark_webhook_url).send(
-                f"Hotel Watchdog test alert from this Mac at {now_text()}.",
-                summary="Hotel Watchdog test successful",
+                f"Watchdog test alert from this Mac at {now_text()}.",
+                summary="Watchdog test successful",
             )
             print(json.dumps(result, indent=2))
             return 0

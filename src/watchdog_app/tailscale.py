@@ -25,7 +25,7 @@ class TailscaleShare:
         self,
         *,
         port: int,
-        route: str = "/hotel-watchdog",
+        route: str = "/watchdog",
         executable: str | None = None,
         runner: Runner = subprocess.run,
     ) -> None:

@@ -5,8 +5,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from hotel_watchdog.config import Config
-from hotel_watchdog.watchdog import Watchdog, read_exact
+from watchdog_app.config import Config
+from watchdog_app.watchdog import Watchdog, read_exact
 
 
 class WatchdogCommandTests(unittest.TestCase):
@@ -26,9 +26,7 @@ class WatchdogCommandTests(unittest.TestCase):
             os.close(write_fd)
 
     def test_recorder_delays_audio_for_video_pre_roll(self):
-        with patch(
-            "hotel_watchdog.watchdog.find_executable", return_value="/tmp/ffmpeg"
-        ):
+        with patch("watchdog_app.watchdog.find_executable", return_value="/tmp/ffmpeg"):
             watchdog = Watchdog(Config(auto_max_resolution=False))
         command = watchdog.recorder_command(Path("/tmp/test.mp4"), 3.0)
         offset_index = command.index("-itsoffset")

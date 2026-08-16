@@ -2,7 +2,7 @@ import json
 import unittest
 from unittest.mock import patch
 
-from hotel_watchdog.hark import HarkClient
+from watchdog_app.hark import HarkClient
 
 
 class FakeResponse:
@@ -18,7 +18,7 @@ class FakeResponse:
 
 class HarkClientTests(unittest.TestCase):
     def test_notification_payload_includes_private_tap_url(self):
-        with patch("hotel_watchdog.hark.urlopen", return_value=FakeResponse()) as send:
+        with patch("watchdog_app.hark.urlopen", return_value=FakeResponse()) as send:
             result = HarkClient(
                 "https://hark.example/hooks/secret", log=lambda _message: None
             ).send(

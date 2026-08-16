@@ -1,6 +1,6 @@
 {
   "hark_webhook_url": "https://hark.ryan.ceo/hooks/REPLACE_WITH_YOUR_TOKEN",
-  "output_dir": "~/Movies/HotelWatchdog",
+  "output_dir": "~/Movies/Watchdog",
   "camera_index": 0,
   "microphone_index": 0,
   "width": 640,
@@ -8,7 +8,7 @@
   "auto_max_resolution": true,
   "recording_fps": 15,
   "tailscale_share": true,
-  "tailscale_path": "/hotel-watchdog",
+  "tailscale_path": "/watchdog",
   "pre_roll_seconds": 3,
   "person_detection": true,
   "person_confidence": 0.5,

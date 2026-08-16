@@ -6,11 +6,14 @@ from dataclasses import asdict, dataclass, fields
 from pathlib import Path
 from typing import Any
 
-APP_NAME = "hotel-watchdog"
+APP_NAME = "watchdog"
+LEGACY_APP_NAME = "hotel-watchdog"
 
 
 def config_dir() -> Path:
-    override = os.environ.get("HOTEL_WATCHDOG_CONFIG_DIR")
+    override = os.environ.get("WATCHDOG_CONFIG_DIR") or os.environ.get(
+        "HOTEL_WATCHDOG_CONFIG_DIR"
+    )
     if override:
         return Path(override).expanduser()
     return Path.home() / ".config" / APP_NAME
@@ -20,6 +23,10 @@ def config_path() -> Path:
     return config_dir() / "config.json"
 
 
+def legacy_config_path() -> Path:
+    return Path.home() / ".config" / LEGACY_APP_NAME / "config.json"
+
+
 def pid_path() -> Path:
     return config_dir() / "watchdog.pid"
 
@@ -27,7 +34,7 @@ def pid_path() -> Path:
 @dataclass(slots=True)
 class Config:
     hark_webhook_url: str = ""
-    output_dir: str = "~/Movies/HotelWatchdog"
+    output_dir: str = "~/Movies/Watchdog"
     camera_index: int = 0
     microphone_index: int = 0
     width: int = 640
@@ -37,7 +44,7 @@ class Config:
     recording_fps: int = 15
     share_port: int = 8766
     tailscale_share: bool = False
-    tailscale_path: str = "/hotel-watchdog"
+    tailscale_path: str = "/watchdog"
     motion_pixel_delta: int = 22
     motion_changed_fraction: float = 0.025
     motion_hits_required: int = 2
@@ -135,17 +142,32 @@ class Config:
 
 def load_config() -> Config:
     path = config_path()
-    if not path.exists():
+    migrated = False
+    source = path
+    if (
+        not source.exists()
+        and not os.environ.get("WATCHDOG_CONFIG_DIR")
+        and legacy_config_path().exists()
+    ):
+        source = legacy_config_path()
+        migrated = True
+    if not source.exists():
         config = Config()
     else:
-        raw = json.loads(path.read_text(encoding="utf-8"))
+        raw = json.loads(source.read_text(encoding="utf-8"))
         allowed = {field.name for field in fields(Config)}
         config = Config(**{key: value for key, value in raw.items() if key in allowed})
+        if migrated and config.tailscale_path == "/hotel-watchdog":
+            config.tailscale_path = "/watchdog"
 
-    env_webhook = os.environ.get("HOTEL_WATCHDOG_HARK_URL")
+    env_webhook = os.environ.get("WATCHDOG_HARK_URL") or os.environ.get(
+        "HOTEL_WATCHDOG_HARK_URL"
+    )
     if env_webhook:
         config.hark_webhook_url = env_webhook
     config.validate()
+    if migrated:
+        save_config(config)
     return config
 
 

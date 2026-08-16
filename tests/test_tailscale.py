@@ -2,7 +2,7 @@ import json
 import subprocess
 import unittest
 
-from hotel_watchdog.tailscale import TailscaleShare, dns_name_from_status
+from watchdog_app.tailscale import TailscaleShare, dns_name_from_status
 
 STATUS = {
     "BackendState": "Running",
@@ -30,13 +30,13 @@ class TailscaleTests(unittest.TestCase):
 
         share = TailscaleShare(
             port=8766,
-            route="/hotel-watchdog",
+            route="/watchdog",
             executable="tailscale",
             runner=runner,
         )
         self.assertEqual(
             share.expose(),
-            "https://watchdog.example-tailnet.ts.net/hotel-watchdog/",
+            "https://watchdog.example-tailnet.ts.net/watchdog/",
         )
         self.assertIn(
             [
@@ -45,7 +45,7 @@ class TailscaleTests(unittest.TestCase):
                 "--bg",
                 "--yes",
                 "--set-path",
-                "/hotel-watchdog",
+                "/watchdog",
                 "http://127.0.0.1:8766",
             ],
             calls,

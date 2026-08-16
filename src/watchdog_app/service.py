@@ -12,9 +12,10 @@ from pathlib import Path
 
 from .config import Config, config_dir
 
-LAUNCH_AGENT_LABEL = "com.alecsiemerink.hotel-watchdog"
+LAUNCH_AGENT_LABEL = "com.alecsiemerink.watchdog"
+LEGACY_LAUNCH_AGENT_LABEL = "com.alecsiemerink.hotel-watchdog"
 LAUNCHER_BUNDLE_ID = f"{LAUNCH_AGENT_LABEL}.launcher"
-LAUNCHER_NAME = "Hotel Watchdog"
+LAUNCHER_NAME = "Watchdog"
 
 _LAUNCHER_SOURCE = r"""
 #import <AVFoundation/AVFoundation.h>
@@ -56,7 +57,7 @@ static int request_access(AVMediaType media_type, const char *label) {
         status == AVAuthorizationStatusRestricted) {
         fprintf(
             stderr,
-            "Hotel Watchdog does not have %s access. Enable it in System "
+            "Watchdog does not have %s access. Enable it in System "
             "Settings > Privacy & Security.\n",
             label
         );
@@ -78,7 +79,7 @@ static int request_access(AVMediaType media_type, const char *label) {
         return 0;
     }
     if (!granted) {
-        fprintf(stderr, "Hotel Watchdog %s access was denied.\n", label);
+        fprintf(stderr, "Watchdog %s access was denied.\n", label);
     }
     return granted ? 1 : 0;
 }
@@ -90,7 +91,7 @@ int main(int argc, char **argv) {
     [NSApp finishLaunching];
     [NSApp activateIgnoringOtherApps:YES];
     if (argc < 4) {
-        fputs("Hotel Watchdog launcher configuration is missing.\n", stderr);
+        fputs("Watchdog launcher configuration is missing.\n", stderr);
         return 78;
     }
 
@@ -128,12 +129,12 @@ int main(int argc, char **argv) {
 
     child_pid = fork();
     if (child_pid < 0) {
-        perror("Could not fork Hotel Watchdog");
+        perror("Could not fork Watchdog");
         return 71;
     }
     if (child_pid == 0) {
         execl(argv[1], argv[1], "run", (char *)NULL);
-        perror("Could not start Hotel Watchdog");
+        perror("Could not start Watchdog");
         _exit(70);
     }
 
@@ -155,6 +156,12 @@ def launch_agent_path() -> Path:
     return Path.home() / "Library" / "LaunchAgents" / f"{LAUNCH_AGENT_LABEL}.plist"
 
 
+def legacy_launch_agent_path() -> Path:
+    return (
+        Path.home() / "Library" / "LaunchAgents" / f"{LEGACY_LAUNCH_AGENT_LABEL}.plist"
+    )
+
+
 def launch_agent_log_path() -> Path:
     # launchd can reject protected user folders such as ~/Movies as direct
     # stdout/stderr destinations before the Python process even starts.
@@ -170,13 +177,13 @@ def launcher_pid_path() -> Path:
 
 
 def resolve_cli_executable() -> Path:
-    executable = shutil.which("hotel-watchdog")
+    executable = shutil.which("watchdog")
     if executable:
         return Path(executable).resolve()
     candidate = Path(sys.argv[0]).resolve()
     if candidate.is_file():
         return candidate
-    raise RuntimeError("Could not resolve the installed hotel-watchdog executable.")
+    raise RuntimeError("Could not resolve the installed watchdog executable.")
 
 
 def launch_agent_payload(app_path: Path, executable: Path) -> dict[str, object]:
@@ -213,7 +220,7 @@ def install_launcher_app(executable: Path) -> Path:
     contents = app_path / "Contents"
     macos = contents / "MacOS"
     macos.mkdir(parents=True, exist_ok=True)
-    launcher = macos / "HotelWatchdogLauncher"
+    launcher = macos / "WatchdogLauncher"
     info = {
         "CFBundleDisplayName": LAUNCHER_NAME,
         "CFBundleExecutable": launcher.name,
@@ -224,10 +231,10 @@ def install_launcher_app(executable: Path) -> Path:
         "CFBundleVersion": "1",
         "LSMinimumSystemVersion": "13.0",
         "NSCameraUsageDescription": (
-            "Hotel Watchdog uses the camera to detect room activity and record evidence."
+            "Watchdog uses the camera to detect room activity and record evidence."
         ),
         "NSMicrophoneUsageDescription": (
-            "Hotel Watchdog uses the microphone when recording a detected event."
+            "Watchdog uses the microphone when recording a detected event."
         ),
     }
     with (contents / "Info.plist").open("wb") as destination:
@@ -245,7 +252,7 @@ def install_launcher_app(executable: Path) -> Path:
         capture_output=True,
         text=True,
     ).stdout.strip()
-    with tempfile.TemporaryDirectory(prefix="hotel-watchdog-launcher-") as directory:
+    with tempfile.TemporaryDirectory(prefix="watchdog-launcher-") as directory:
         source = Path(directory) / "main.m"
         source.write_text(_LAUNCHER_SOURCE, encoding="utf-8")
         subprocess.run(
@@ -281,6 +288,17 @@ def _domain() -> str:
     return f"gui/{os.getuid()}"
 
 
+def _remove_legacy_launch_agent() -> None:
+    path = legacy_launch_agent_path()
+    subprocess.run(
+        ["/bin/launchctl", "bootout", _domain(), str(path)],
+        check=False,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    path.unlink(missing_ok=True)
+
+
 def _stop_launcher_app() -> None:
     path = launcher_pid_path()
     try:
@@ -288,7 +306,7 @@ def _stop_launcher_app() -> None:
     except (FileNotFoundError, ValueError):
         path.unlink(missing_ok=True)
         return
-    expected = str(launcher_app_path() / "Contents" / "MacOS" / "HotelWatchdogLauncher")
+    expected = str(launcher_app_path() / "Contents" / "MacOS" / "WatchdogLauncher")
     result = subprocess.run(
         ["/bin/ps", "-p", str(pid), "-o", "command="],
         check=False,
@@ -347,6 +365,7 @@ def install_launch_agent(
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
+    _remove_legacy_launch_agent()
     _stop_launcher_app()
     app_path = install_launcher_app(executable)
     path.parent.mkdir(parents=True, exist_ok=True)

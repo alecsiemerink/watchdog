@@ -3,8 +3,8 @@ requires = ["setuptools>=69"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "hotel-watchdog"
-version = "0.2.2"
+name = "watchdog-macos"
+version = "0.1.0"
 description = "A motion-triggered macOS room monitor with Hark alerts and private Tailscale viewing."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -28,11 +28,11 @@ dependencies = [
 dev = ["ruff>=0.12"]
 
 [project.scripts]
-hotel-watchdog = "hotel_watchdog.cli:main"
+watchdog = "watchdog_app.cli:main"
 
 [project.urls]
-Repository = "https://github.com/alecsiemerink/hotel-watchdog"
-Issues = "https://github.com/alecsiemerink/hotel-watchdog/issues"
+Repository = "https://github.com/alecsiemerink/watchdog"
+Issues = "https://github.com/alecsiemerink/watchdog/issues"
 
 [tool.setuptools.packages.find]
 where = ["src"]

@@ -1,8 +1,8 @@
 import subprocess
 import unittest
 
-from hotel_watchdog.config import Config
-from hotel_watchdog.resolution import (
+from watchdog_app.config import Config
+from watchdog_app.resolution import (
     CameraMode,
     parse_camera_modes,
     resolve_max_resolution,

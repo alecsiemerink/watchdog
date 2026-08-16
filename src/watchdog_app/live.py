@@ -107,7 +107,7 @@ class WatchdogHTTPServer(ThreadingHTTPServer):
 
 def make_handler(state: LiveState, output_dir: Path, log: Log):
     class Handler(BaseHTTPRequestHandler):
-        server_version = "HotelWatchdog/0.2"
+        server_version = "Watchdog/0.1"
 
         def log_message(self, format_string: str, *args) -> None:
             log("Live view: " + (format_string % args))
@@ -165,7 +165,7 @@ def make_handler(state: LiveState, output_dir: Path, log: Log):
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="color-scheme" content="dark">
-  <title>Hotel Watchdog</title>
+  <title>Watchdog</title>
   <style>
     :root {{ color-scheme: dark; font-family: ui-rounded, -apple-system, BlinkMacSystemFont, sans-serif; }}
     * {{ box-sizing: border-box; }}
@@ -189,7 +189,7 @@ def make_handler(state: LiveState, output_dir: Path, log: Log):
 </head>
 <body>
   <main>
-    <header><h1>Hotel Watchdog</h1><span class="status {status_class}">{status_text}</span></header>
+    <header><h1>Watchdog</h1><span class="status {status_class}">{status_text}</span></header>
     <section class="viewer">
       <img src="stream.mjpeg" alt="Live room camera">
       <div class="meta"><span>{html.escape(current.last_event)}</span><span>Started {html.escape(current.started_at)}</span></div>

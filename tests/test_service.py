@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from hotel_watchdog.service import (
+from watchdog_app.service import (
     LAUNCH_AGENT_LABEL,
     _stop_launcher_app,
     launch_agent_log_path,
@@ -19,11 +19,9 @@ class LaunchAgentTests(unittest.TestCase):
     def test_payload_runs_cli_in_aqua_session(self):
         with (
             tempfile.TemporaryDirectory() as directory,
-            patch.dict(
-                os.environ, {"HOTEL_WATCHDOG_CONFIG_DIR": directory}, clear=False
-            ),
+            patch.dict(os.environ, {"WATCHDOG_CONFIG_DIR": directory}, clear=False),
         ):
-            executable = Path("/usr/local/bin/hotel-watchdog")
+            executable = Path("/usr/local/bin/watchdog")
             payload = launch_agent_payload(launcher_app_path(), executable)
             self.assertEqual(payload["Label"], LAUNCH_AGENT_LABEL)
             self.assertEqual(
@@ -49,16 +47,14 @@ class LaunchAgentTests(unittest.TestCase):
     def test_stop_launcher_ignores_unrelated_stale_pid(self):
         with (
             tempfile.TemporaryDirectory() as directory,
-            patch.dict(
-                os.environ, {"HOTEL_WATCHDOG_CONFIG_DIR": directory}, clear=False
-            ),
+            patch.dict(os.environ, {"WATCHDOG_CONFIG_DIR": directory}, clear=False),
             patch(
-                "hotel_watchdog.service.subprocess.run",
+                "watchdog_app.service.subprocess.run",
                 return_value=subprocess.CompletedProcess(
                     [], 0, "/usr/bin/unrelated", ""
                 ),
             ),
-            patch("hotel_watchdog.service.os.kill") as kill,
+            patch("watchdog_app.service.os.kill") as kill,
         ):
             launcher_pid_path().write_text("123\n", encoding="utf-8")
             _stop_launcher_app()
@@ -68,26 +64,21 @@ class LaunchAgentTests(unittest.TestCase):
     def test_stop_launcher_signals_its_verified_process_group(self):
         with (
             tempfile.TemporaryDirectory() as directory,
-            patch.dict(
-                os.environ, {"HOTEL_WATCHDOG_CONFIG_DIR": directory}, clear=False
-            ),
+            patch.dict(os.environ, {"WATCHDOG_CONFIG_DIR": directory}, clear=False),
             patch(
-                "hotel_watchdog.service.subprocess.run",
+                "watchdog_app.service.subprocess.run",
                 return_value=subprocess.CompletedProcess(
                     [],
                     0,
                     str(
-                        launcher_app_path()
-                        / "Contents"
-                        / "MacOS"
-                        / "HotelWatchdogLauncher"
+                        launcher_app_path() / "Contents" / "MacOS" / "WatchdogLauncher"
                     ),
                     "",
                 ),
             ),
-            patch("hotel_watchdog.service.os.getpgid", return_value=456),
-            patch("hotel_watchdog.service.os.killpg") as kill_group,
-            patch("hotel_watchdog.service.os.kill", side_effect=ProcessLookupError),
+            patch("watchdog_app.service.os.getpgid", return_value=456),
+            patch("watchdog_app.service.os.killpg") as kill_group,
+            patch("watchdog_app.service.os.kill", side_effect=ProcessLookupError),
         ):
             launcher_pid_path().write_text("456\n", encoding="utf-8")
             _stop_launcher_app()

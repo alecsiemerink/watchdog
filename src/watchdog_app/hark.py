@@ -29,10 +29,10 @@ class HarkClient:
             return {"ok": False, "skipped": True}
 
         payload: dict[str, object] = {
-            "title": "Hotel Watchdog",
+            "title": "Watchdog",
             "body": body,
             "summary": summary or body,
-            "project": "Hotel Watchdog",
+            "project": "Watchdog",
         }
         if url:
             payload["url"] = url
