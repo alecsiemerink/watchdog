@@ -1,4 +1,5 @@
 import os
+import plistlib
 import subprocess
 import tempfile
 import unittest
@@ -7,6 +8,9 @@ from unittest.mock import patch
 
 from watchdog_app.service import (
     LAUNCH_AGENT_LABEL,
+    LAUNCHER_BUILD_VERSION,
+    LAUNCHER_BUNDLE_ID,
+    _installed_launcher_is_current,
     _stop_launcher_app,
     launch_agent_log_path,
     launch_agent_payload,
@@ -16,6 +20,52 @@ from watchdog_app.service import (
 
 
 class LaunchAgentTests(unittest.TestCase):
+    def test_current_signed_launcher_is_reused(self):
+        with tempfile.TemporaryDirectory() as directory:
+            app = Path(directory) / "Watchdog.app"
+            executable = app / "Contents" / "MacOS" / "WatchdogLauncher"
+            executable.parent.mkdir(parents=True)
+            executable.write_bytes(b"launcher")
+            executable.chmod(0o755)
+            with (app / "Contents" / "Info.plist").open("wb") as destination:
+                plistlib.dump(
+                    {
+                        "CFBundleIdentifier": LAUNCHER_BUNDLE_ID,
+                        "CFBundleExecutable": executable.name,
+                        "CFBundleVersion": LAUNCHER_BUILD_VERSION,
+                    },
+                    destination,
+                )
+            with patch(
+                "watchdog_app.service.subprocess.run",
+                return_value=subprocess.CompletedProcess([], 0, "", ""),
+            ) as run:
+                self.assertTrue(_installed_launcher_is_current(app))
+            run.assert_called_once_with(
+                ["/usr/bin/codesign", "--verify", "--strict", str(app)],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+
+    def test_launcher_with_old_build_is_rebuilt(self):
+        with tempfile.TemporaryDirectory() as directory:
+            app = Path(directory) / "Watchdog.app"
+            executable = app / "Contents" / "MacOS" / "WatchdogLauncher"
+            executable.parent.mkdir(parents=True)
+            executable.write_bytes(b"launcher")
+            executable.chmod(0o755)
+            with (app / "Contents" / "Info.plist").open("wb") as destination:
+                plistlib.dump(
+                    {
+                        "CFBundleIdentifier": LAUNCHER_BUNDLE_ID,
+                        "CFBundleExecutable": executable.name,
+                        "CFBundleVersion": "0",
+                    },
+                    destination,
+                )
+            self.assertFalse(_installed_launcher_is_current(app))
+
     def test_payload_runs_cli_in_aqua_session(self):
         with (
             tempfile.TemporaryDirectory() as directory,

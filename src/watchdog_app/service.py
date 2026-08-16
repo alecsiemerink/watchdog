@@ -17,6 +17,9 @@ LAUNCH_AGENT_LABEL = "com.alecsiemerink.watchdog"
 LEGACY_LAUNCH_AGENT_LABEL = "com.alecsiemerink.hotel-watchdog"
 LAUNCHER_BUNDLE_ID = f"{LAUNCH_AGENT_LABEL}.launcher"
 LAUNCHER_NAME = "Watchdog"
+# Bump only when the native launcher source or its permission behavior changes.
+# Package reinstalls should preserve the signed app so macOS keeps its TCC grants.
+LAUNCHER_BUILD_VERSION = "1"
 
 _LAUNCHER_SOURCE = r"""
 #import <AVFoundation/AVFoundation.h>
@@ -187,6 +190,31 @@ def resolve_cli_executable() -> Path:
     raise RuntimeError("Could not resolve the installed watchdog executable.")
 
 
+def _installed_launcher_is_current(app_path: Path) -> bool:
+    info_path = app_path / "Contents" / "Info.plist"
+    launcher = app_path / "Contents" / "MacOS" / "WatchdogLauncher"
+    try:
+        with info_path.open("rb") as source:
+            info = plistlib.load(source)
+        if (
+            info.get("CFBundleIdentifier") != LAUNCHER_BUNDLE_ID
+            or info.get("CFBundleExecutable") != launcher.name
+            or info.get("CFBundleVersion") != LAUNCHER_BUILD_VERSION
+            or not launcher.is_file()
+            or not os.access(launcher, os.X_OK)
+        ):
+            return False
+        result = subprocess.run(
+            ["/usr/bin/codesign", "--verify", "--strict", str(app_path)],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        return result.returncode == 0
+    except (OSError, plistlib.InvalidFileException, TypeError, ValueError):
+        return False
+
+
 def launch_agent_payload(app_path: Path, executable: Path) -> dict[str, object]:
     log_path = launch_agent_log_path()
     return {
@@ -218,6 +246,8 @@ def launch_agent_payload(app_path: Path, executable: Path) -> dict[str, object]:
 def install_launcher_app(executable: Path) -> Path:
     """Build the tiny app wrapper macOS needs for camera/mic TCC attribution."""
     app_path = launcher_app_path()
+    if _installed_launcher_is_current(app_path):
+        return app_path
     contents = app_path / "Contents"
     macos = contents / "MacOS"
     macos.mkdir(parents=True, exist_ok=True)
@@ -229,7 +259,7 @@ def install_launcher_app(executable: Path) -> Path:
         "CFBundleName": LAUNCHER_NAME,
         "CFBundlePackageType": "APPL",
         "CFBundleShortVersionString": __version__,
-        "CFBundleVersion": "1",
+        "CFBundleVersion": LAUNCHER_BUILD_VERSION,
         "LSMinimumSystemVersion": "13.0",
         "NSCameraUsageDescription": (
             "Watchdog uses the camera to detect room activity and record evidence."
