@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hotel-watchdog"
+version = "0.1.0"
+description = "A motion-triggered macOS room monitor with Hark alerts and private Tailscale viewing."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Alec Siemerink" }]
+keywords = ["macos", "webcam", "motion-detection", "hark", "tailscale"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: MacOS X",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: MacOS",
+  "Programming Language :: Python :: 3",
+  "Topic :: Home Automation",
+  "Topic :: Multimedia :: Video :: Capture",
+]
+dependencies = ["Pillow>=10.0"]
+
+[project.scripts]
+hotel-watchdog = "hotel_watchdog.cli:main"
+
+[project.urls]
+Repository = "https://github.com/alecsiemerink/hotel-watchdog"
+Issues = "https://github.com/alecsiemerink/hotel-watchdog/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]

@@ -1,0 +1,21 @@
+.DS_Store
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.coverage
+.pytest_cache/
+.ruff_cache/
+
+# Local secrets and captured media
+.env
+config.json
+*.mp4
+*.mov
+*.jpg
+*.jpeg
+*.mjpeg
+watchdog.log
+watchdog.pid

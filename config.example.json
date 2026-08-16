@@ -1,0 +1,8 @@
+{
+  "hark_webhook_url": "https://hark.ryan.ceo/hooks/REPLACE_WITH_YOUR_TOKEN",
+  "output_dir": "~/Movies/HotelWatchdog",
+  "camera_index": 0,
+  "microphone_index": 0,
+  "tailscale_share": true,
+  "tailscale_path": "/hotel-watchdog"
+}
