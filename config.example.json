@@ -3,6 +3,16 @@
   "output_dir": "~/Movies/HotelWatchdog",
   "camera_index": 0,
   "microphone_index": 0,
+  "width": 640,
+  "height": 480,
+  "recording_fps": 15,
   "tailscale_share": true,
-  "tailscale_path": "/hotel-watchdog"
+  "tailscale_path": "/hotel-watchdog",
+  "pre_roll_seconds": 3,
+  "person_detection": true,
+  "person_confidence": 0.5,
+  "tamper_detection": true,
+  "retention_days": 30,
+  "retention_max_total_gb": 10,
+  "minimum_free_disk_gb": 2
 }

@@ -18,6 +18,13 @@ from urllib.request import urlopen
 from . import __version__
 from .config import Config, config_dir, load_config, pid_path, save_config
 from .hark import HarkClient
+from .person import VisionPersonDetector
+from .retention import apply_retention
+from .service import (
+    install_launch_agent,
+    launch_agent_status,
+    uninstall_launch_agent,
+)
 from .tailscale import TailscaleShare
 from .watchdog import Watchdog, find_executable, now_text
 
@@ -167,6 +174,12 @@ def configure(args: argparse.Namespace, config: Config) -> int:
             args.camera_index is not None,
             args.microphone_index is not None,
             args.share_port is not None,
+            args.person_detection is not None,
+            args.tamper_detection is not None,
+            args.pre_roll_seconds is not None,
+            args.retention_days is not None,
+            args.retention_max_total_gb is not None,
+            args.minimum_free_disk_gb is not None,
         )
     )
     if interactive:
@@ -201,6 +214,18 @@ def configure(args: argparse.Namespace, config: Config) -> int:
             updates["microphone_index"] = args.microphone_index
         if args.share_port is not None:
             updates["share_port"] = args.share_port
+        if args.person_detection is not None:
+            updates["person_detection"] = args.person_detection
+        if args.tamper_detection is not None:
+            updates["tamper_detection"] = args.tamper_detection
+        if args.pre_roll_seconds is not None:
+            updates["pre_roll_seconds"] = args.pre_roll_seconds
+        if args.retention_days is not None:
+            updates["retention_days"] = args.retention_days
+        if args.retention_max_total_gb is not None:
+            updates["retention_max_total_gb"] = args.retention_max_total_gb
+        if args.minimum_free_disk_gb is not None:
+            updates["minimum_free_disk_gb"] = args.minimum_free_disk_gb
         config = replace(config, **updates)
 
     path = save_config(config)
@@ -358,6 +383,38 @@ def doctor_command(config: Config) -> int:
             "Camera/microphone check failed. Review macOS Privacy & Security permissions and device indexes."
         )
     print("Camera and microphone: OK")
+    if config.person_detection:
+        capture = subprocess.run(
+            [
+                ffmpeg,
+                "-nostdin",
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-f",
+                "avfoundation",
+                "-framerate",
+                str(config.camera_input_fps),
+                "-video_size",
+                f"{config.width}x{config.height}",
+                "-i",
+                str(config.camera_index),
+                "-frames:v",
+                "1",
+                "-f",
+                "image2pipe",
+                "-vcodec",
+                "mjpeg",
+                "pipe:1",
+            ],
+            check=True,
+            capture_output=True,
+        )
+        detections = VisionPersonDetector().detect(capture.stdout)
+        print(
+            "Apple Vision person detection: OK "
+            f"({len(detections)} person observation(s) in the test frame)"
+        )
     print(
         f"Hark: {'configured' if config.hark_webhook_url else 'not configured (optional)'}"
     )
@@ -368,6 +425,52 @@ def doctor_command(config: Config) -> int:
         print("Tailscale sharing: disabled (optional)")
     print("Doctor check passed.")
     return 0
+
+
+def retention_command(args: argparse.Namespace, config: Config) -> int:
+    config.output_path.mkdir(parents=True, exist_ok=True)
+    result = apply_retention(
+        config.output_path,
+        max_age_days=config.retention_days,
+        max_total_bytes=round(config.retention_max_total_gb * 1_000_000_000),
+        minimum_free_bytes=round(config.minimum_free_disk_gb * 1_000_000_000),
+        dry_run=args.dry_run,
+    )
+    action = "Would remove" if args.dry_run else "Removed"
+    print(
+        f"{action} {len(result.removed)} media file(s), "
+        f"reclaiming {result.reclaimed_bytes / 1_000_000:.1f} MB."
+    )
+    for path in result.removed:
+        print(path)
+    print(
+        f"Retained media: {result.total_bytes / 1_000_000:.1f} MB; "
+        f"free disk: {result.free_bytes / 1_000_000_000:.1f} GB."
+    )
+    return 1 if result.critically_low else 0
+
+
+def service_command(args: argparse.Namespace, config: Config) -> int:
+    if args.service_command == "install":
+        path = install_launch_agent(config, start_now=not args.no_start)
+        print(f"Installed LaunchAgent: {path}")
+        if args.no_start:
+            print("It will arm at the next login. Run hotel-watchdog start to arm now.")
+        else:
+            print("LaunchAgent loaded; check hotel-watchdog status and the log.")
+        return 0
+    if args.service_command == "uninstall":
+        removed = uninstall_launch_agent()
+        print("LaunchAgent removed." if removed else "LaunchAgent was not installed.")
+        return 0
+    if args.service_command == "status":
+        result = launch_agent_status()
+        if result.returncode:
+            print("LaunchAgent is not loaded.")
+            return 1
+        print(result.stdout.rstrip())
+        return 0
+    raise RuntimeError("Unknown service command.")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -395,6 +498,20 @@ def build_parser() -> argparse.ArgumentParser:
     configure_parser.add_argument("--camera-index", type=int)
     configure_parser.add_argument("--microphone-index", type=int)
     configure_parser.add_argument("--share-port", type=int)
+    configure_parser.add_argument(
+        "--person-detection",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+    )
+    configure_parser.add_argument(
+        "--tamper-detection",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+    )
+    configure_parser.add_argument("--pre-roll-seconds", type=int)
+    configure_parser.add_argument("--retention-days", type=int)
+    configure_parser.add_argument("--retention-max-total-gb", type=float)
+    configure_parser.add_argument("--minimum-free-disk-gb", type=float)
 
     subparsers.add_parser(
         "show-config", help="Print configuration with secrets redacted."
@@ -404,6 +521,10 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("stop", help="Disarm and finish the current clip.")
     subparsers.add_parser("status", help="Show watcher state and URLs.")
     subparsers.add_parser("recordings", help="List recorded clips.")
+    retention_parser = subparsers.add_parser(
+        "retention", help="Apply or preview recording retention."
+    )
+    retention_parser.add_argument("--dry-run", action="store_true")
     subparsers.add_parser(
         "doctor", help="Check dependencies and camera/microphone access."
     )
@@ -424,14 +545,31 @@ def build_parser() -> argparse.ArgumentParser:
     share_parser.add_argument(
         "--notify", action="store_true", help="Send the URL via Hark."
     )
+
+    service_parser = subparsers.add_parser(
+        "service", help="Manage automatic arming with a macOS LaunchAgent."
+    )
+    service_subparsers = service_parser.add_subparsers(
+        dest="service_command", required=True
+    )
+    install_parser = service_subparsers.add_parser(
+        "install", help="Install and load the LaunchAgent."
+    )
+    install_parser.add_argument(
+        "--no-start", action="store_true", help="Install without arming immediately."
+    )
+    service_subparsers.add_parser(
+        "uninstall", help="Unload and remove the LaunchAgent."
+    )
+    service_subparsers.add_parser("status", help="Show launchd service state.")
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
-    config = load_config()
     try:
+        config = load_config()
         if args.command == "configure":
             return configure(args, config)
         if args.command == "show-config":
@@ -450,6 +588,8 @@ def main(argv: list[str] | None = None) -> int:
             return show_status(config)
         if args.command == "recordings":
             return recordings_command(config)
+        if args.command == "retention":
+            return retention_command(args, config)
         if args.command == "doctor":
             return doctor_command(config)
         if args.command == "test-alert":
@@ -463,7 +603,15 @@ def main(argv: list[str] | None = None) -> int:
             return snapshot_command(args, config)
         if args.command == "share":
             return share_command(args, config)
-    except (RuntimeError, subprocess.CalledProcessError, OSError) as error:
+        if args.command == "service":
+            return service_command(args, config)
+    except (
+        RuntimeError,
+        subprocess.CalledProcessError,
+        OSError,
+        TypeError,
+        ValueError,
+    ) as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
     parser.error("Unknown command")

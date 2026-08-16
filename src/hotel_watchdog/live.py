@@ -18,6 +18,8 @@ Log = Callable[[str], None]
 class LiveStatus:
     armed: bool
     recording: bool
+    person_present: bool
+    camera_warning: bool
     started_at: str
     latest_recording: str | None
     last_event: str
@@ -30,6 +32,8 @@ class LiveState:
         self._frame_version = 0
         self._armed = False
         self._recording = False
+        self._person_present = False
+        self._camera_warning = False
         self._started_at = datetime.now().astimezone().isoformat(timespec="seconds")
         self._latest_recording: str | None = None
         self._last_event = "Starting"
@@ -67,11 +71,29 @@ class LiveState:
                 if filename:
                     self._latest_recording = filename
 
+    def set_person_present(self, present: bool) -> None:
+        with self._condition:
+            self._person_present = present
+            if present:
+                self._last_event = "Person detected"
+            elif not self._recording and not self._camera_warning:
+                self._last_event = "Monitoring"
+
+    def set_camera_warning(self, warning: bool) -> None:
+        with self._condition:
+            self._camera_warning = warning
+            if warning:
+                self._last_event = "Camera may be obstructed or moved"
+            elif not self._recording and not self._person_present:
+                self._last_event = "Monitoring"
+
     def status(self) -> LiveStatus:
         with self._condition:
             return LiveStatus(
                 armed=self._armed,
                 recording=self._recording,
+                person_present=self._person_present,
+                camera_warning=self._camera_warning,
                 started_at=self._started_at,
                 latest_recording=self._latest_recording,
                 last_event=self._last_event,
@@ -85,7 +107,7 @@ class WatchdogHTTPServer(ThreadingHTTPServer):
 
 def make_handler(state: LiveState, output_dir: Path, log: Log):
     class Handler(BaseHTTPRequestHandler):
-        server_version = "HotelWatchdog/0.1"
+        server_version = "HotelWatchdog/0.2"
 
         def log_message(self, format_string: str, *args) -> None:
             log("Live view: " + (format_string % args))
@@ -108,6 +130,8 @@ def make_handler(state: LiveState, output_dir: Path, log: Log):
                 self._stream()
             elif path.startswith("/recordings/"):
                 self._recording(path.removeprefix("/recordings/"), head_only=head_only)
+            elif path.startswith("/evidence/"):
+                self._evidence(path.removeprefix("/evidence/"), head_only=head_only)
             else:
                 self.send_error(404)
 
@@ -126,12 +150,15 @@ def make_handler(state: LiveState, output_dir: Path, log: Log):
                     + safe_name
                     + '">Play latest recording</a>'
                 )
-            status_class = "recording" if current.recording else "armed"
-            status_text = (
-                "RECORDING"
-                if current.recording
-                else ("ARMED" if current.armed else "OFFLINE")
-            )
+            if current.camera_warning:
+                status_class, status_text = "warning", "CAMERA CHECK"
+            elif current.recording:
+                status_class, status_text = "recording", "RECORDING"
+            elif current.person_present:
+                status_class, status_text = "person", "PERSON"
+            else:
+                status_class = "armed"
+                status_text = "ARMED" if current.armed else "OFFLINE"
             document = f"""<!doctype html>
 <html lang="en">
 <head>
@@ -148,6 +175,8 @@ def make_handler(state: LiveState, output_dir: Path, log: Log):
     h1 {{ font-size: clamp(1.35rem, 5vw, 2rem); margin: 0; letter-spacing: -.03em; }}
     .status {{ border: 1px solid #284331; color: #75ee9c; background: #102018; border-radius: 999px; padding: 7px 11px; font: 700 .72rem ui-monospace, monospace; letter-spacing: .08em; }}
     .status.recording {{ border-color: #613636; color: #ff8a8a; background: #2b1212; }}
+    .status.person {{ border-color: #31577a; color: #83c7ff; background: #102238; }}
+    .status.warning {{ border-color: #735f26; color: #ffd86a; background: #2d260f; }}
     .viewer {{ overflow: hidden; border-radius: 18px; border: 1px solid #242a31; background: #11161c; box-shadow: 0 24px 70px #0008; }}
     .viewer img {{ width: 100%; height: auto; display: block; aspect-ratio: 4/3; object-fit: cover; }}
     .meta {{ display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; padding: 12px 14px; color: #aeb8b0; font-size: .88rem; }}
@@ -240,6 +269,27 @@ def make_handler(state: LiveState, output_dir: Path, log: Log):
                 self.send_error(404)
                 return
             self._send_file(path, head_only=head_only)
+
+        def _evidence(self, raw_name: str, *, head_only: bool) -> None:
+            name = unquote(raw_name)
+            if not re.fullmatch(
+                r"(?:motion|person|tamper)_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}\.jpg",
+                name,
+            ):
+                self.send_error(404)
+                return
+            path = output_dir / name
+            if not path.is_file():
+                self.send_error(404)
+                return
+            size = path.stat().st_size
+            self.send_response(200)
+            self.send_header("Content-Type", "image/jpeg")
+            self.send_header("Content-Length", str(size))
+            self._common_headers()
+            self.end_headers()
+            if not head_only:
+                self.wfile.write(path.read_bytes())
 
         def _send_file(self, path: Path, *, head_only: bool) -> None:
             size = path.stat().st_size

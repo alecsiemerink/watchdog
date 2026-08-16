@@ -61,6 +61,16 @@ class TailscaleTests(unittest.TestCase):
         url = share.recording_url(__import__("pathlib").Path("motion clip.mp4"))
         self.assertTrue(url.endswith("/recordings/motion%20clip.mp4"))
 
+    def test_evidence_url_quotes_filename(self):
+        def runner(arguments, **kwargs):
+            return subprocess.CompletedProcess(
+                arguments, 0, stdout=json.dumps(STATUS), stderr=""
+            )
+
+        share = TailscaleShare(port=8766, executable="tailscale", runner=runner)
+        url = share.evidence_url(__import__("pathlib").Path("person image.jpg"))
+        self.assertTrue(url.endswith("/evidence/person%20image.jpg"))
+
 
 if __name__ == "__main__":
     unittest.main()

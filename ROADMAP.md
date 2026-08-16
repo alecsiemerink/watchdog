@@ -1,41 +1,45 @@
 # Roadmap
 
-Hotel Watchdog follows a small-core approach: reliable local capture first, private remote access second, convenience features after that.
+Hotel Watchdog keeps capture local, remote access private, and unattended behavior predictable.
 
 ## v0.1 — Initial private release
 
-- [x] Motion detection using the Mac camera and local FFmpeg
-- [x] H.264 video and AAC audio recordings
-- [x] Hark notifications for arming, motion, completed clips, and fatal errors
-- [x] Current snapshot and low-frame-rate live view
-- [x] Tailnet-only HTTPS access through Tailscale Serve
-- [x] Mobile playback with HTTP byte-range support
-- [x] Secure local webhook configuration with secret redaction
-- [x] Background operation with idle-sleep prevention
-- [x] Doctor command for real camera and microphone verification
-- [x] Unit tests on Python 3.10, 3.12, and 3.14
-- [x] Open-source-ready README, MIT license, security policy, CI, and dependency updates
+- [x] Local motion detection and H.264/AAC recording
+- [x] Hark arming, motion, completion, and fatal-error alerts
+- [x] Tailnet-only current snapshot, live view, and mobile MP4 playback
+- [x] Secret-redacted mode-`0600` configuration
+- [x] Idle-sleep prevention, device doctor, tests, CI, and open-source files
+
+## v0.2 — Safer unattended monitoring
+
+- [x] Local Apple Vision person detection without face recognition
+- [x] Sustained camera obstruction, darkness, movement, and recovery detection
+- [x] Immediate private trigger/person/tamper evidence links through Hark
+- [x] Three-second, memory-bounded video pre-roll with synchronized triggered audio
+- [x] Age, total-size, and free-disk retention policy with dry-run mode
+- [x] Active-recording deletion protection and Hark disk warnings
+- [x] macOS LaunchAgent install, status, and uninstall commands
+- [x] Camera/microphone permission onboarding and operational documentation
+- [x] Private rich-preview research: keep evidence tailnet-only while Hark requires publicly fetched images
 
 ## Before making the repository public
 
 - [ ] Run longer unattended soak tests on battery and mains power
-- [ ] Test at least one additional Intel or Apple Silicon Mac/camera combination
-- [ ] Review macOS permission behavior when installed with `pipx`
+- [ ] Test an additional Intel or Apple Silicon Mac/camera combination
+- [ ] Verify LaunchAgent permission behavior for both `pipx` and virtualenv installs
 - [ ] Perform a final secret and captured-media audit
-- [ ] Add release notes and tag the first public version
+- [ ] Decide whether v0.2 is the first public release
 
-## Backlog
+## Future candidates
 
-- [Camera obstruction or movement detection](https://github.com/alecsiemerink/hotel-watchdog/issues/1)
-- [Local person detection without face recognition](https://github.com/alecsiemerink/hotel-watchdog/issues/6)
-- [Pre-trigger recording buffer](https://github.com/alecsiemerink/hotel-watchdog/issues/2)
-- [Recording retention and disk-space policy](https://github.com/alecsiemerink/hotel-watchdog/issues/3)
-- [Native macOS background and menu-bar experience](https://github.com/alecsiemerink/hotel-watchdog/issues/4)
-- [Private rich snapshot previews in Hark](https://github.com/alecsiemerink/hotel-watchdog/issues/5)
+- A signed/notarized menu-bar app with arm/disarm controls
+- Native private notification media if Hark adds authenticated image fetching
+- Optional encrypted off-device backups
+- Additional redistribution-safe person-detection fixtures
 
 ## Deliberate non-goals
 
 - Disabling or hiding the macOS camera indicator
 - Public streaming by default
 - Uploading recordings to a third-party cloud without explicit opt-in
-- Face recognition or identity tracking
+- Face recognition, identity tracking, or biometric profiles

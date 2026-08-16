@@ -72,4 +72,6 @@ class HarkClient:
             except Exception as error:  # noqa: BLE001 - alerts must never stop recording.
                 self.log(f"Hark alert failed: {error}")
 
-        threading.Thread(target=worker, name="hark-alert", daemon=True).start()
+        # Non-daemon threads get a bounded chance to finish during CLI/daemon exit;
+        # urlopen itself has a ten-second timeout.
+        threading.Thread(target=worker, name="hark-alert", daemon=False).start()

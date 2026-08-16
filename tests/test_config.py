@@ -48,6 +48,16 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(public["hark_webhook_url"], "configured (redacted)")
         self.assertNotIn("secret", json.dumps(public))
 
+    def test_invalid_pre_roll_is_rejected(self):
+        with self.assertRaises(ValueError):
+            Config(pre_roll_seconds=11).validate()
+
+    def test_broad_output_directories_are_rejected(self):
+        with self.assertRaises(ValueError):
+            Config(output_dir=str(Path.home())).validate()
+        with self.assertRaises(ValueError):
+            Config(output_dir="/").validate()
+
 
 if __name__ == "__main__":
     unittest.main()

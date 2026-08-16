@@ -1,35 +1,39 @@
 # Hotel Watchdog
 
-A small, self-hosted macOS room monitor. It watches the built-in camera for movement, records video with audio, sends [Hark](https://hark.ryan.ceo/) notifications, and exposes snapshots, a live feed, and finished clips privately through [Tailscale Serve](https://tailscale.com/docs/features/tailscale-serve).
+A self-hosted macOS room monitor. Hotel Watchdog watches the camera locally, records movement with audio, distinguishes people from generic motion, warns if the camera is covered or moved, sends [Hark](https://hark.ryan.ceo/) notifications, and serves private snapshots, live video, and recordings through [Tailscale Serve](https://tailscale.com/docs/features/tailscale-serve).
 
-No account is required for Hotel Watchdog itself, and recordings stay on the Mac. Hark and Tailscale are optional integrations.
+Recordings stay on the Mac. Person detection uses Apple Vision on-device—camera frames are never sent to a vision API, and there is no face recognition.
 
 > [!IMPORTANT]
-> Use this only where you are legally allowed to record. Do not point it into shared hallways or other spaces where people reasonably expect privacy without checking the applicable rules.
+> Use this only where you are legally allowed to record video and audio. Keep the camera inside your private room; do not capture shared hallways or spaces where others reasonably expect privacy without checking the applicable rules.
 
-## What it does
+## Features
 
-- Detects motion without a cloud vision service.
-- Starts an H.264/AAC recording when movement persists across two checks.
-- Keeps recording until the room has been quiet for 30 seconds.
-- Sends a Hark push when monitoring starts, when motion begins, and when a clip is ready.
-- Opens a tailnet-only live page from the Hark notification.
-- Shows a current snapshot first, followed by a low-frame-rate MJPEG live feed.
-- Links finished recordings directly from Hark for mobile playback.
-- Prevents idle system sleep while armed while still allowing the display to turn off.
-- Stores the Hark webhook outside the repository in a mode-`0600` config file.
+- Local motion detection with a configurable, memory-bounded video pre-roll.
+- H.264 video and AAC audio with synchronized silence during the pre-trigger video.
+- Optional on-device person detection using Apple Vision.
+- Sustained camera-cover, darkness, or major-view-change detection and recovery alerts.
+- An immediate trigger snapshot plus annotated person/tamper evidence images.
+- Hark alerts for arming, motion, people, camera warnings, saved clips, disk warnings, and errors.
+- Tailnet-only snapshot, MJPEG live view, and byte-range MP4 playback.
+- Age, total-size, and minimum-free-space retention policies that never delete an active clip.
+- A macOS LaunchAgent for automatic arming after login.
+- Secure mode-`0600` local configuration with webhook redaction.
 
 ```mermaid
 flowchart LR
-    C[Mac camera] --> F[FFmpeg capture]
-    F --> M[Motion detector]
-    M -->|movement| R[Video + audio clip]
-    F --> S[Current snapshot / live frames]
-    S --> L[Local-only web server]
-    R --> L
+    C[Mac camera] --> F[Local FFmpeg capture]
+    F --> M[Motion + tamper]
+    F --> V[Apple Vision person detection]
+    M --> R[Pre-roll + video/audio clip]
+    F --> S[Snapshot + live stream]
+    V --> E[Annotated evidence]
+    R --> L[Local-only web server]
+    S --> L
+    E --> L
     L --> T[Tailscale Serve]
-    T --> P[iPhone]
     M --> H[Hark push]
+    V --> H
     R --> H
     H -->|tap| T
 ```
@@ -38,11 +42,11 @@ flowchart LR
 
 - macOS with a camera and microphone
 - Python 3.10 or newer
-- [FFmpeg](https://ffmpeg.org/) for camera capture and recording
+- [FFmpeg](https://ffmpeg.org/) for AVFoundation capture and recording
 - Optional: [Hark for iPhone](https://hark.ryan.ceo/docs) for notifications
-- Optional: [Tailscale](https://tailscale.com/download/mac) on the Mac and phone for private remote viewing
+- Optional: [Tailscale](https://tailscale.com/download/mac) on both Mac and phone for private remote viewing
 
-The current capture path uses macOS AVFoundation. Linux and Windows are not supported yet.
+The capture and person-detection paths are macOS-specific. Linux and Windows are not supported yet.
 
 ## Install
 
@@ -55,13 +59,24 @@ cd hotel-watchdog
 pipx install .
 ```
 
-For local development:
+For development:
 
 ```bash
 python3 -m venv .venv
-.venv/bin/pip install -e .
+.venv/bin/pip install -e '.[dev]'
 .venv/bin/hotel-watchdog --version
 ```
+
+### Upgrade from v0.1
+
+```bash
+cd hotel-watchdog
+git pull
+pipx reinstall .
+hotel-watchdog doctor
+```
+
+Existing v0.1 config files remain valid. Missing v0.2 fields receive the documented defaults; the webhook is not rewritten. The LaunchAgent is opt-in and is not installed during upgrade.
 
 ## Configure
 
@@ -71,21 +86,22 @@ Create a service in the [Hark dashboard](https://hark.ryan.ceo/), copy its secre
 hotel-watchdog configure
 ```
 
-The prompt hides the webhook while you type or paste it. It also asks whether to enable the Tailscale live view. Configuration lives at:
+The interactive prompt hides the webhook while it is pasted and asks whether to enable the Tailscale live view. Configuration is saved at:
 
 ```text
 ~/.config/hotel-watchdog/config.json
 ```
 
-The file is created with mode `0600`. You can alternatively provide the webhook at runtime through `HOTEL_WATCHDOG_HARK_URL`.
+The file is mode `0600`. The webhook can instead be supplied through `HOTEL_WATCHDOG_HARK_URL`. Do not put the real URL in this repository or in shell history.
 
-Before leaving the Mac unattended, verify the full capture path and approve the macOS Camera and Microphone prompts:
+Before leaving the Mac, approve the macOS Camera and Microphone prompts and test the complete local capture path:
 
 ```bash
 hotel-watchdog doctor
+hotel-watchdog test-alert
 ```
 
-If macOS denied access previously, open **System Settings → Privacy & Security → Camera** and **Microphone**, then allow the terminal or Python/FFmpeg process that launches Hotel Watchdog.
+If access was denied previously, open **System Settings → Privacy & Security → Camera** and **Microphone**, then allow the terminal or Python/FFmpeg process that launches Hotel Watchdog.
 
 ## Use
 
@@ -93,90 +109,129 @@ If macOS denied access previously, open **System Settings → Privacy & Security
 # Arm in the background
 hotel-watchdog start
 
-# Confirm monitoring and print the private live URL
+# Confirm state and print the private live URL
 hotel-watchdog status
 
-# Capture a still and optionally send its private URL through Hark
+# Capture a still and optionally send its private link through Hark
 hotel-watchdog snapshot --notify
 
-# Send the latest recording through Hark over Tailscale
+# Send the latest recording link through Hark
 hotel-watchdog share --notify
 
-# List local recordings
+# List recordings and preview the retention policy
 hotel-watchdog recordings
+hotel-watchdog retention --dry-run
 
-# Disarm and safely finalize any active clip
+# Disarm and safely finalize an active clip
 hotel-watchdog stop
 ```
 
-Recordings and logs default to `~/Movies/HotelWatchdog`.
+Recordings, evidence snapshots, and logs default to `~/Movies/HotelWatchdog`.
+
+### Start automatically after login
+
+Run `doctor` from the installed executable first so macOS can grant access to the actual capture process. Then install the user LaunchAgent:
+
+```bash
+hotel-watchdog service install
+hotel-watchdog service status
+```
+
+To write the LaunchAgent without arming immediately, use `service install --no-start`; it will load after the next login. Remove it with:
+
+```bash
+hotel-watchdog service uninstall
+```
+
+This is a per-user LaunchAgent, not a privileged system daemon. It runs only in the logged-in graphical session.
 
 ### Locking the Mac
 
-Locking the screen is fine: Hotel Watchdog runs in the logged-in session and uses `caffeinate` to prevent idle system sleep. Keep the lid open. Closing the lid, logging out, restarting, or losing power stops monitoring. A charger is strongly recommended.
+Locking the screen is fine. Hotel Watchdog uses `caffeinate` to prevent idle system sleep while allowing the display to turn off. Keep the lid open. Closing the lid, logging out, restarting, or losing power stops the current session; the LaunchAgent re-arms after the next login. Use a charger for unattended monitoring.
 
-## Hark notification flow
+## Notifications and private evidence
 
-Hotel Watchdog uses the [Hark Notification API](https://hark.ryan.ceo/docs):
-
-| Event | Notification | Tap destination |
+| Event | Evidence created | Hark tap destination |
 | --- | --- | --- |
-| Armed | Includes the private snapshot URL | Tailscale live page |
-| Motion detected | Confirms video + audio recording started | Tailscale live page |
-| Recording saved | Includes duration and size | Exact Tailscale recording URL |
-| Fatal error | Includes the failure reason | Live page when available |
+| Armed | Current live frame | Private Tailscale dashboard |
+| Motion detected | Exact trigger snapshot | Private trigger image |
+| Person detected | Snapshot with local Vision bounding box | Private person image |
+| Camera obstructed/moved | Camera-warning snapshot | Private warning image |
+| Camera recovered | None | Private live page |
+| Recording saved | H.264/AAC MP4 | Exact private recording |
+| Disk/fatal warning | Error details | Live page when available |
 
-Hark requires `imageUrl` assets to be publicly reachable. A private Tailscale snapshot therefore cannot be embedded as a rich push image. Hotel Watchdog keeps the image private and makes the push open a live page whose first frame is the current snapshot.
+Hark's current `imageUrl` field requires an image that its public service can fetch; a tailnet-only URL cannot be rendered inline. Hotel Watchdog therefore makes the notification open the exact private evidence image. It never enables Tailscale Funnel or publishes a snapshot just to create a rich preview. This is the most private flow supported by the current [Hark webhook API](https://hark.ryan.ceo/docs).
 
 ## Tailscale live view
 
-When enabled, Hotel Watchdog starts a localhost-only HTTP server and adds one path to the machine's existing Tailscale Serve configuration:
+When enabled, Hotel Watchdog binds its HTTP server only to `127.0.0.1` and adds one path to the machine's existing Serve configuration:
 
 ```text
 https://your-mac.your-tailnet.ts.net/hotel-watchdog/
 ```
 
-The page provides:
+The page has a live MJPEG view, a current JPEG snapshot, status badges for people/recording/camera warnings, and a link to the latest clip. Completed MP4s support HTTP byte ranges for mobile seeking.
 
-- a low-frame-rate live camera view;
-- `snapshot.jpg` for the latest still;
-- byte-range-enabled MP4 playback for completed recordings.
+Tailscale access rules still apply. Existing Serve paths are preserved. The project never enables [Tailscale Funnel](https://tailscale.com/docs/features/tailscale-funnel), so it does not make the feed public. Proxying the localhost server also works with the sandboxed macOS Tailscale app, which cannot directly serve files from protected user folders.
 
-The server binds only to `127.0.0.1`; Tailscale Serve provides tailnet-only HTTPS access. Existing Serve paths are preserved. Tailnet access rules still apply. Hotel Watchdog never enables [Tailscale Funnel](https://tailscale.com/docs/features/tailscale-funnel), so it does not make the feed public.
+## Detection and recording defaults
 
-On sandboxed macOS Tailscale builds, direct file serving from protected folders is unavailable. Proxying the local Hotel Watchdog server is the supported path and is why the app includes its small HTTP server. See the official [Tailscale Serve examples](https://tailscale.com/docs/reference/examples/serve).
+- Capture: 640×480 at 30 fps; recording at 15 fps.
+- Motion: two consecutive checks with at least 2.5% changed sampled pixels.
+- Pre-roll: three seconds of video, bounded to about 42 MB at the default resolution.
+- Audio: begins at the trigger and is timestamp-shifted to remain synchronized; pre-trigger video is silent.
+- Clip duration: at least 15 seconds, stops after 30 quiet seconds, maximum 10 minutes.
+- Person detection: one local Vision request per second, two positive hits to alert, five misses to clear, 50% minimum confidence.
+- Camera warning: 10-frame baseline and eight seconds of sustained darkness, uniform cover, or major view shift; four seconds to declare recovery.
+- Retention: 30 days, 10 GB total media, and a 2 GB free-disk floor.
 
-## Motion and recording defaults
+Person detection is supported by the Apple Vision framework on both Apple Silicon and Intel Macs supported by the installed macOS/Python combination. It adds CPU and battery use, and alert latency includes the one-second sampling interval plus the configured persistence threshold. If Vision cannot load or fails, generic motion recording continues and the error is logged.
 
-- Camera input: 640×480 at 30 fps
-- Recording: 640×480 at 15 fps, H.264 video + AAC audio
-- Motion checks: roughly twice per second
-- Trigger: at least 2.5% of sampled pixels change by 22 luma levels, twice consecutively
-- Quiet cutoff: 30 seconds
-- Minimum clip: 15 seconds
-- Maximum clip: 10 minutes; continued motion starts another clip
+The obstruction detector compares against the view learned at startup. Start with an unobstructed camera; a camera that is already covered when the process launches may become its baseline.
 
-Advanced values can be changed in the local JSON config. Run `hotel-watchdog show-config` to inspect the effective values without exposing the webhook.
+Inspect every effective setting without exposing the webhook:
+
+```bash
+hotel-watchdog show-config
+```
+
+Common overrides:
+
+```bash
+hotel-watchdog configure \
+  --pre-roll-seconds 5 \
+  --person-detection \
+  --tamper-detection \
+  --retention-days 14 \
+  --retention-max-total-gb 5 \
+  --minimum-free-disk-gb 3
+```
+
+Set pre-roll to `0` to disable it; values above 10 seconds are rejected to bound memory use. Set a retention age or size to `0` to disable that individual limit. The free-disk floor is checked at startup and after completed clips.
 
 ## Security notes
 
 - Treat the Hark webhook as a credential. Anyone holding it can notify your devices.
-- Never commit `config.json`, recordings, snapshots, or logs.
-- Tailscale links work only for identities allowed by your tailnet policy.
+- Never commit config files, real tailnet hostnames, recordings, snapshots, or logs.
+- Tailscale links work only for identities permitted by the tailnet policy.
 - The green macOS camera indicator remains visible while monitoring.
-- The local live server has no directory listing and only serves recognized recording filenames.
+- The live server has no directory listing and only serves recognized media names.
+- Evidence images and recordings follow the same retention policy.
 - Rotate a leaked Hark webhook in the Hark dashboard.
 
-See [SECURITY.md](SECURITY.md) for reporting guidance.
+See [SECURITY.md](SECURITY.md) for vulnerability reporting.
 
 ## Development
 
 ```bash
+ruff check .
+ruff format --check .
 python3 -m unittest discover -s tests -v
 ```
 
-Pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) and the current [roadmap](ROADMAP.md).
+Pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md), [CHANGELOG.md](CHANGELOG.md), and the [roadmap](ROADMAP.md).
 
 ## License
 
-[MIT](LICENSE). Hotel Watchdog is an independent project and is not affiliated with Hark, Tailscale, Apple, or FFmpeg.
+[MIT](LICENSE). Hotel Watchdog is independent and is not affiliated with Hark, Tailscale, Apple, or FFmpeg.

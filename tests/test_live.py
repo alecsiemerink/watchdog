@@ -52,6 +52,20 @@ class LiveServerTests(unittest.TestCase):
             self.assertEqual(response.headers["Content-Range"], "bytes 2-5/10")
             self.assertEqual(response.read(), b"2345")
 
+    def test_evidence_snapshot(self):
+        evidence = self.output_dir / "person_2026-08-16_10-13-04.jpg"
+        evidence.write_bytes(b"\xff\xd8evidence\xff\xd9")
+        with urlopen(self.base + "/evidence/" + evidence.name) as response:
+            self.assertEqual(response.headers.get_content_type(), "image/jpeg")
+            self.assertEqual(response.read(), evidence.read_bytes())
+
+    def test_motion_trigger_snapshot(self):
+        evidence = self.output_dir / "motion_2026-08-16_10-13-04.jpg"
+        evidence.write_bytes(b"\xff\xd8trigger\xff\xd9")
+        with urlopen(self.base + "/evidence/" + evidence.name) as response:
+            self.assertEqual(response.headers.get_content_type(), "image/jpeg")
+            self.assertEqual(response.read(), evidence.read_bytes())
+
     def test_directory_traversal_is_rejected(self):
         with self.assertRaises(HTTPError) as context:
             urlopen(self.base + "/recordings/..%2Fsecret.mp4")

@@ -68,6 +68,9 @@ class TailscaleShare:
     def recording_url(self, path: Path) -> str:
         return self.base_url + "recordings/" + quote(path.name)
 
+    def evidence_url(self, path: Path) -> str:
+        return self.base_url + "evidence/" + quote(path.name)
+
     def expose(self) -> str:
         # Proxying localhost also works with the sandboxed macOS Tailscale app,
         # which cannot serve files from protected user directories directly.
