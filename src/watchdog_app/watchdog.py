@@ -95,6 +95,7 @@ class Watchdog:
         self.ffmpeg = find_executable("ffmpeg", "/opt/homebrew/bin/ffmpeg")
         self.config = resolve_max_resolution(config, self.ffmpeg, log=log)
         self.stop_event = threading.Event()
+        self._signal_number: int | None = None
         self.live_state = LiveState()
         self.live_server = LiveServer(
             self.live_state,
@@ -191,7 +192,9 @@ class Watchdog:
         return command
 
     def _signal(self, signum, _frame) -> None:
-        log(f"Received signal {signum}; stopping.")
+        # Python signal handlers can interrupt a print already in progress. Keep
+        # this handler reentrant-safe and log once the main loop regains control.
+        self._signal_number = signum
         self.stop_event.set()
 
     def _setup(self) -> str | None:
@@ -634,6 +637,8 @@ class Watchdog:
 
                 pre_roll.append(frame)
 
+            if self._signal_number is not None:
+                log(f"Received signal {self._signal_number}; stopping.")
             return 0
         except Exception as error:  # noqa: BLE001 - top-level daemon safety boundary.
             log(f"Fatal error: {error}")

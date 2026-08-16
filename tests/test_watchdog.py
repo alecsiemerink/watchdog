@@ -34,6 +34,15 @@ class WatchdogCommandTests(unittest.TestCase):
         self.assertEqual(command[offset_index + 1], "3.000")
         self.assertLess(offset_index, audio_input_index)
 
+    def test_signal_handler_only_sets_shutdown_state(self):
+        with patch("watchdog_app.watchdog.find_executable", return_value="/tmp/ffmpeg"):
+            watchdog = Watchdog(Config(auto_max_resolution=False))
+        with patch("watchdog_app.watchdog.log") as log:
+            watchdog._signal(15, None)
+        self.assertTrue(watchdog.stop_event.is_set())
+        self.assertEqual(watchdog._signal_number, 15)
+        log.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()
