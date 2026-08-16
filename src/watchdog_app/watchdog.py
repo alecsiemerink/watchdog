@@ -15,8 +15,9 @@ from typing import BinaryIO
 
 from PIL import Image
 
-from .config import Config, pid_path
+from .config import Config, config_dir, pid_path
 from .hark import HarkClient
+from .hls import HLSStreamer, hls_directory
 from .live import LiveServer, LiveState
 from .person import (
     PersonDetectionWorker,
@@ -97,11 +98,23 @@ class Watchdog:
         self.stop_event = threading.Event()
         self._signal_number: int | None = None
         self.live_state = LiveState()
+        self.hls_streamer = HLSStreamer(
+            ffmpeg=self.ffmpeg,
+            directory=hls_directory(config_dir()),
+            width=self.config.width,
+            height=self.config.height,
+            fps=self.config.recording_fps,
+            microphone_index=self.config.microphone_index,
+            audio_enabled=self.config.live_audio,
+            log=log,
+        )
         self.live_server = LiveServer(
             self.live_state,
             self.config.output_path,
             self.config.share_port,
             log,
+            hls_dir=self.hls_streamer.directory,
+            live_audio=self.config.live_audio,
         )
         self.hark = HarkClient(self.config.hark_webhook_url, log)
         self.tailscale: TailscaleShare | None = None
@@ -491,6 +504,13 @@ class Watchdog:
             )
             if self.camera.stdout is None:
                 raise RuntimeError("Could not read camera output.")
+            try:
+                self.hls_streamer.start()
+            except (OSError, RuntimeError) as error:
+                log(
+                    "Native HLS live stream unavailable; MJPEG fallback remains "
+                    f"active: {error}"
+                )
 
             frame_size = self.config.width * self.config.height * 3
             check_every = max(1, round(self.config.recording_fps / 2))
@@ -543,6 +563,7 @@ class Watchdog:
 
                 frame_number += 1
                 now = time.monotonic()
+                self.hls_streamer.submit(frame)
 
                 needs_person_frame = bool(
                     self.person_worker and frame_number % person_every == 0
@@ -660,6 +681,7 @@ class Watchdog:
                 except subprocess.TimeoutExpired:
                     self.camera.kill()
                     self.camera.wait()
+            self.hls_streamer.stop()
             if self.caffeinate and self.caffeinate.poll() is None:
                 self.caffeinate.terminate()
             self.live_state.set_armed(False)

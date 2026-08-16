@@ -2,6 +2,12 @@
 
 All notable changes are documented here. The project follows semantic versioning while the command-line and configuration formats stabilize.
 
+## 0.1.1 — 2026-08-16
+
+- Added a native HLS player with live H.264 video and AAC microphone audio over the private Tailscale route.
+- Kept the lower-bandwidth MJPEG stream as an automatic fallback for browsers without native HLS support.
+- Added a newest-first dashboard library of completed recordings with local timestamps, sizes, and direct playback links.
+
 ## 0.1.0 — 2026-08-16
 
 First public release.

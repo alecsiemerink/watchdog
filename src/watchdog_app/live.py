@@ -9,9 +9,13 @@ from dataclasses import asdict, dataclass
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import unquote, urlsplit
+from urllib.parse import quote, unquote, urlsplit
 
 Log = Callable[[str], None]
+RECORDING_NAME = re.compile(
+    r"motion_(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2})\.(?:mp4|mov)",
+    flags=re.IGNORECASE,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -105,7 +109,68 @@ class WatchdogHTTPServer(ThreadingHTTPServer):
     allow_reuse_address = True
 
 
-def make_handler(state: LiveState, output_dir: Path, log: Log):
+def recording_library(output_dir: Path, limit: int = 100) -> list[dict[str, str]]:
+    recordings: list[tuple[float, Path]] = []
+    for candidate in output_dir.iterdir():
+        if not candidate.is_file() or not RECORDING_NAME.fullmatch(candidate.name):
+            continue
+        try:
+            recordings.append((candidate.stat().st_mtime, candidate))
+        except OSError:
+            continue
+    recordings.sort(key=lambda item: item[0], reverse=True)
+
+    result: list[dict[str, str]] = []
+    for modified, candidate in recordings[:limit]:
+        match = RECORDING_NAME.fullmatch(candidate.name)
+        assert match is not None
+        try:
+            timestamp = datetime.strptime(
+                match.group(1), "%Y-%m-%d_%H-%M-%S"
+            ).astimezone()
+        except ValueError:
+            timestamp = datetime.fromtimestamp(modified).astimezone()
+        try:
+            size = candidate.stat().st_size
+        except OSError:
+            continue
+        result.append(
+            {
+                "name": candidate.name,
+                "url": "recordings/" + quote(candidate.name),
+                "iso": timestamp.isoformat(timespec="seconds"),
+                "timestamp": timestamp.strftime("%b %d, %Y · %H:%M:%S %Z"),
+                "size": f"{size / 1_000_000:.1f} MB",
+            }
+        )
+    return result
+
+
+def recording_library_html(output_dir: Path) -> str:
+    recordings = recording_library(output_dir)
+    if not recordings:
+        return '<p class="empty">No completed recordings yet.</p>'
+    return "".join(
+        '<a class="recording" href="{url}">'
+        '<span><strong>Motion recording</strong><time datetime="{iso}">{timestamp}</time></span>'
+        '<span class="recording-meta">{size}<b aria-hidden="true">›</b></span>'
+        "</a>".format(
+            url=html.escape(item["url"], quote=True),
+            iso=html.escape(item["iso"], quote=True),
+            timestamp=html.escape(item["timestamp"]),
+            size=html.escape(item["size"]),
+        )
+        for item in recordings
+    )
+
+
+def make_handler(
+    state: LiveState,
+    output_dir: Path,
+    hls_dir: Path,
+    live_audio: bool,
+    log: Log,
+):
     class Handler(BaseHTTPRequestHandler):
         server_version = "Watchdog/0.1"
 
@@ -113,10 +178,16 @@ def make_handler(state: LiveState, output_dir: Path, log: Log):
             log("Live view: " + (format_string % args))
 
         def do_HEAD(self) -> None:
-            self._route(head_only=True)
+            try:
+                self._route(head_only=True)
+            except (BrokenPipeError, ConnectionResetError, TimeoutError):
+                self.close_connection = True
 
         def do_GET(self) -> None:
-            self._route(head_only=False)
+            try:
+                self._route(head_only=False)
+            except (BrokenPipeError, ConnectionResetError, TimeoutError):
+                self.close_connection = True
 
         def _route(self, *, head_only: bool) -> None:
             path = urlsplit(self.path).path
@@ -128,6 +199,8 @@ def make_handler(state: LiveState, output_dir: Path, log: Log):
                 self._snapshot(head_only=head_only)
             elif path == "/stream.mjpeg" and not head_only:
                 self._stream()
+            elif path.startswith("/live/"):
+                self._hls(path.removeprefix("/live/"), head_only=head_only)
             elif path.startswith("/recordings/"):
                 self._recording(path.removeprefix("/recordings/"), head_only=head_only)
             elif path.startswith("/evidence/"):
@@ -142,14 +215,12 @@ def make_handler(state: LiveState, output_dir: Path, log: Log):
 
         def _dashboard(self, *, head_only: bool) -> None:
             current = state.status()
-            recording_link = ""
-            if current.latest_recording:
-                safe_name = html.escape(current.latest_recording, quote=True)
-                recording_link = (
-                    '<a class="button secondary" href="recordings/'
-                    + safe_name
-                    + '">Play latest recording</a>'
-                )
+            recordings = recording_library_html(output_dir)
+            audio_note = (
+                "Live microphone audio is available — tap the speaker to unmute."
+                if live_audio
+                else "The native live stream is video-only by configuration."
+            )
             if current.camera_warning:
                 status_class, status_text = "warning", "CAMERA CHECK"
             elif current.recording:
@@ -178,11 +249,23 @@ def make_handler(state: LiveState, output_dir: Path, log: Log):
     .status.person {{ border-color: #31577a; color: #83c7ff; background: #102238; }}
     .status.warning {{ border-color: #735f26; color: #ffd86a; background: #2d260f; }}
     .viewer {{ overflow: hidden; border-radius: 18px; border: 1px solid #242a31; background: #11161c; box-shadow: 0 24px 70px #0008; }}
-    .viewer img {{ width: 100%; height: auto; display: block; aspect-ratio: 4/3; object-fit: cover; }}
+    .viewer video, .viewer img {{ width: 100%; height: auto; display: block; aspect-ratio: 4/3; object-fit: cover; background: #050607; }}
     .meta {{ display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; padding: 12px 14px; color: #aeb8b0; font-size: .88rem; }}
+    .audio-note {{ padding: 0 14px 13px; color: #91a299; font-size: .8rem; }}
     .actions {{ display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }}
     .button {{ display: block; text-align: center; color: #07110b; background: #71e998; text-decoration: none; padding: 13px; border-radius: 12px; font-weight: 750; }}
     .button.secondary {{ color: #e9efea; background: #1a2128; border: 1px solid #303840; }}
+    .library {{ margin-top: 26px; }}
+    .library h2 {{ margin: 0 0 10px; font-size: 1.1rem; }}
+    .recording-list {{ overflow: hidden; border: 1px solid #242a31; border-radius: 14px; background: #11161c; }}
+    .recording {{ display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 13px 14px; color: #eef3ef; text-decoration: none; border-bottom: 1px solid #242a31; }}
+    .recording:last-child {{ border-bottom: 0; }}
+    .recording:hover {{ background: #171d24; }}
+    .recording strong, .recording time {{ display: block; }}
+    .recording time {{ color: #94a099; font-size: .82rem; margin-top: 3px; }}
+    .recording-meta {{ display: flex; align-items: center; gap: 10px; color: #94a099; font-size: .82rem; white-space: nowrap; }}
+    .recording-meta b {{ color: #71e998; font-size: 1.5rem; line-height: 1; }}
+    .empty {{ margin: 0; padding: 16px; color: #94a099; }}
     footer {{ color: #69736c; text-align: center; font-size: .78rem; margin-top: 18px; }}
     @media (max-width: 560px) {{ .actions {{ grid-template-columns: 1fr; }} main {{ padding: 12px; }} }}
   </style>
@@ -191,15 +274,49 @@ def make_handler(state: LiveState, output_dir: Path, log: Log):
   <main>
     <header><h1>Watchdog</h1><span class="status {status_class}">{status_text}</span></header>
     <section class="viewer">
-      <img src="stream.mjpeg" alt="Live room camera">
+      <video id="live-player" controls autoplay muted playsinline poster="snapshot.jpg" aria-label="Live room camera with audio"></video>
+      <img id="mjpeg-fallback" src="stream.mjpeg" alt="Live room camera video fallback" hidden>
       <div class="meta"><span>{html.escape(current.last_event)}</span><span>Started {html.escape(current.started_at)}</span></div>
+      <div class="audio-note">{html.escape(audio_note)}</div>
     </section>
     <nav class="actions">
       <a class="button" href="snapshot.jpg">Open current snapshot</a>
-      {recording_link}
+      <a class="button secondary" href="stream.mjpeg">Low-bandwidth video fallback</a>
     </nav>
+    <section class="library">
+      <h2>Recordings</h2>
+      <div class="recording-list">{recordings}</div>
+    </section>
     <footer>Tailnet-only live view · no cloud video storage</footer>
   </main>
+  <script>
+    (() => {{
+      const player = document.getElementById("live-player");
+      const fallback = document.getElementById("mjpeg-fallback");
+      const playlist = "live/live.m3u8";
+      const showFallback = () => {{ player.hidden = true; fallback.hidden = false; }};
+      if (!player.canPlayType("application/vnd.apple.mpegurl")) {{
+        showFallback();
+        return;
+      }}
+      player.addEventListener("error", showFallback, {{ once: true }});
+      const connect = async () => {{
+        for (let attempt = 0; attempt < 30; attempt += 1) {{
+          try {{
+            const response = await fetch(playlist, {{ cache: "no-store" }});
+            if (response.ok) {{
+              player.src = playlist;
+              player.play().catch(() => {{}});
+              return;
+            }}
+          }} catch (_) {{}}
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }}
+        showFallback();
+      }};
+      connect();
+    }})();
+  </script>
 </body>
 </html>
 """.encode()
@@ -256,6 +373,34 @@ def make_handler(state: LiveState, output_dir: Path, log: Log):
                     self.wfile.flush()
             except (BrokenPipeError, ConnectionResetError, TimeoutError):
                 return
+
+        def _hls(self, raw_name: str, *, head_only: bool) -> None:
+            name = unquote(raw_name)
+            if not re.fullmatch(r"(?:live\.m3u8|segment_\d{6,12}\.ts)", name):
+                self.send_error(404)
+                return
+            path = hls_dir / name
+            if not path.is_file():
+                if name == "live.m3u8":
+                    self.send_error(503, "Native live stream is warming up")
+                else:
+                    self.send_error(404)
+                return
+            try:
+                payload = path.read_bytes()
+            except OSError:
+                self.send_error(404)
+                return
+            content_type = (
+                "application/vnd.apple.mpegurl" if name == "live.m3u8" else "video/mp2t"
+            )
+            self.send_response(200)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Length", str(len(payload)))
+            self._common_headers()
+            self.end_headers()
+            if not head_only:
+                self.wfile.write(payload)
 
         def _recording(self, raw_name: str, *, head_only: bool) -> None:
             name = unquote(raw_name)
@@ -345,18 +490,33 @@ def make_handler(state: LiveState, output_dir: Path, log: Log):
 
 class LiveServer:
     def __init__(
-        self, state: LiveState, output_dir: Path, port: int, log: Log = print
+        self,
+        state: LiveState,
+        output_dir: Path,
+        port: int,
+        log: Log = print,
+        *,
+        hls_dir: Path | None = None,
+        live_audio: bool = True,
     ) -> None:
         self.state = state
         self.output_dir = output_dir
         self.port = port
         self.log = log
+        self.hls_dir = hls_dir or output_dir / ".watchdog-live"
+        self.live_audio = live_audio
         self._server: WatchdogHTTPServer | None = None
         self._thread: threading.Thread | None = None
 
     def start(self) -> int:
         self.output_dir.mkdir(parents=True, exist_ok=True)
-        handler = make_handler(self.state, self.output_dir, self.log)
+        handler = make_handler(
+            self.state,
+            self.output_dir,
+            self.hls_dir,
+            self.live_audio,
+            self.log,
+        )
         self._server = WatchdogHTTPServer(("127.0.0.1", self.port), handler)
         self.port = self._server.server_address[1]
         self._thread = threading.Thread(

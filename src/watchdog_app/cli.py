@@ -186,6 +186,7 @@ def configure(args: argparse.Namespace, config: Config) -> int:
             args.microphone_index is not None,
             args.share_port is not None,
             args.max_resolution is not None,
+            args.live_audio is not None,
             args.person_detection is not None,
             args.tamper_detection is not None,
             args.pre_roll_seconds is not None,
@@ -228,6 +229,8 @@ def configure(args: argparse.Namespace, config: Config) -> int:
             updates["share_port"] = args.share_port
         if args.max_resolution is not None:
             updates["auto_max_resolution"] = args.max_resolution
+        if args.live_audio is not None:
+            updates["live_audio"] = args.live_audio
         if args.person_detection is not None:
             updates["person_detection"] = args.person_detection
         if args.tamper_detection is not None:
@@ -521,6 +524,12 @@ def build_parser() -> argparse.ArgumentParser:
         action=argparse.BooleanOptionalAction,
         default=None,
         help="Auto-select the camera's highest supported landscape resolution.",
+    )
+    configure_parser.add_argument(
+        "--live-audio",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Include microphone audio in the private native live stream.",
     )
     configure_parser.add_argument(
         "--person-detection",

@@ -9,6 +9,7 @@
   "recording_fps": 15,
   "tailscale_share": true,
   "tailscale_path": "/watchdog",
+  "live_audio": true,
   "pre_roll_seconds": 3,
   "person_detection": true,
   "person_confidence": 0.5,

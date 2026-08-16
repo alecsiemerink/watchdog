@@ -16,7 +16,8 @@ Recordings stay on the Mac. Person detection uses Apple Vision on-device—camer
 - Sustained camera-cover, darkness, or major-view-change detection and recovery alerts.
 - An immediate trigger snapshot plus annotated person/tamper evidence images.
 - Hark alerts for arming, motion, people, camera warnings, saved clips, disk warnings, and errors.
-- Tailnet-only snapshot, MJPEG live view, and byte-range MP4 playback.
+- Tailnet-only native HLS video/audio, an MJPEG fallback, and byte-range MP4 playback.
+- A newest-first recording library with timestamps, sizes, and direct playback links.
 - Age, total-size, and minimum-free-space retention policies that never delete an active clip.
 - A macOS LaunchAgent for automatic arming after login.
 - Secure mode-`0600` local configuration with webhook redaction.
@@ -142,7 +143,7 @@ LaunchAgent output is written to `~/.config/watchdog/launchagent.log` so launchd
 
 ### Tested release path
 
-v0.1.0 was exercised end to end on a 2021 MacBook Pro (`MacBookPro18,3`, Apple M1 Pro) running macOS 15.7.4, Python 3.12.2, FFmpeg 8.1, and Tailscale 1.96.4. The real-hardware test covered automatic 1760×1328 selection, motion and person events, camera cover/recovery, H.264/AAC recording with pre-roll, Hark delivery, tailnet-only snapshots/live view/byte-range playback, clean `pipx` installation, and LaunchAgent startup. Unit tests also run in CI on Python 3.10, 3.12, and 3.14.
+v0.1 was exercised end to end on a 2021 MacBook Pro (`MacBookPro18,3`, Apple M1 Pro) running macOS 15.7.4, Python 3.12.2, FFmpeg 8.1, and Tailscale 1.96.4. The real-hardware test covered automatic 1760×1328 selection, motion and person events, camera cover/recovery, H.264/AAC recording with pre-roll, Hark delivery, tailnet-only native HLS video/audio, snapshots, the recording library, mobile byte-range playback, clean `pipx` installation, and automatic startup. Unit tests also run in CI on Python 3.10, 3.12, and 3.14.
 
 ### Locking the Mac
 
@@ -170,7 +171,11 @@ When enabled, Watchdog binds its HTTP server only to `127.0.0.1` and adds one pa
 https://your-mac.your-tailnet.ts.net/watchdog/
 ```
 
-The page has a live MJPEG view, a current JPEG snapshot, status badges for people/recording/camera warnings, and a link to the latest clip. Completed MP4s support HTTP byte ranges for mobile seeking.
+The page has a native HLS player carrying live H.264 video and AAC microphone audio. Browsers normally require a tap before playing audio, so the stream autoplays muted; use the player's speaker control to unmute. A lower-bandwidth MJPEG video stream remains available as an automatic and manual fallback.
+
+Below the player, the dashboard lists completed recordings newest-first with local timestamps, file sizes, and direct playback links. Completed MP4s support HTTP byte ranges for mobile seeking.
+
+HLS uses a short rolling set of temporary segments under `~/.config/watchdog/live`; it is not a permanent second recording. The directory is mode `0700`, old live segments are removed on startup, and the feed remains available only through localhost and the configured tailnet route.
 
 Tailscale access rules still apply. Existing Serve paths are preserved. The project never enables [Tailscale Funnel](https://tailscale.com/docs/features/tailscale-funnel), so it does not make the feed public. Proxying the localhost server also works with the sandboxed macOS Tailscale app, which cannot directly serve files from protected user folders.
 
@@ -200,6 +205,7 @@ Common overrides:
 ```bash
 watchdog configure \
   --max-resolution \
+  --live-audio \
   --pre-roll-seconds 5 \
   --person-detection \
   --tamper-detection \
@@ -217,6 +223,7 @@ Set pre-roll to `0` to disable it; values above 10 seconds are rejected to bound
 - Treat the Hark webhook as a credential. Anyone holding it can notify your devices.
 - Never commit config files, real tailnet hostnames, recordings, snapshots, or logs.
 - Tailscale links work only for identities permitted by the tailnet policy.
+- Live microphone audio is enabled by default when viewing the native player; use `watchdog configure --no-live-audio` for video-only HLS.
 - The green macOS camera indicator remains visible while monitoring.
 - The live server has no directory listing and only serves recognized media names.
 - Evidence images and recordings follow the same retention policy.

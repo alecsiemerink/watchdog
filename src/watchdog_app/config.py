@@ -45,6 +45,7 @@ class Config:
     share_port: int = 8766
     tailscale_share: bool = False
     tailscale_path: str = "/watchdog"
+    live_audio: bool = True
     motion_pixel_delta: int = 22
     motion_changed_fraction: float = 0.025
     motion_hits_required: int = 2

@@ -9,7 +9,7 @@ Watchdog keeps capture local, remote access private, and unattended behavior pre
 - [x] Local Apple Vision person detection without face recognition
 - [x] Sustained camera obstruction, darkness, movement, and recovery detection
 - [x] Hark alerts with exact private evidence and recording links
-- [x] Tailnet-only snapshot, live view, and mobile MP4 playback
+- [x] Tailnet-only native video/audio, MJPEG fallback, recording library, and mobile MP4 playback
 - [x] Age, total-size, and free-disk retention with active-recording protection
 - [x] Secret-redacted mode-`0600` configuration
 - [x] macOS automatic-login service with permission onboarding
